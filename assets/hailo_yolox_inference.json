@@ -1,0 +1,31 @@
+{
+    "rpicam-apps":
+    {
+        "lores":
+        {
+            "width": 640,
+            "height": 640,
+            "format": "rgb"
+        }
+    },
+
+    "hailo_yolo_inference":
+    {
+        "hef_file": "/usr/share/hailo-models/yolox_s_leaky_h8l_mz.hef",
+        "max_detections": 20,
+        "threshold": 0.4,
+
+        "temporal_filter":
+        {
+            "tolerance": 0.1,
+            "factor": 0.8,
+            "visible_frames": 6,
+            "hidden_frames": 3
+        }
+    },
+
+    "object_detect_draw_cv":
+    {
+        "line_thickness" : 2
+    }
+}
