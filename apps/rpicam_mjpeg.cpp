@@ -13,6 +13,8 @@
 
 #include "image/image.hpp"
 
+#include <libcamera/control_ids.h>
+
 using namespace std::placeholders;
 using libcamera::Stream;
 
@@ -30,6 +32,14 @@ public:
 	}
 };
 
+static void mjpeg_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
+			   std::string const &filename, std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize)
+{
+    // TODO: Review if RaspiMJPEG allows arbitrary resolutions (which this supports).
+    // If it doesn't, and we get multi-streams back from the camera working we can do the resize on the camera hardware directly.
+    jpeg_save(mem, info, metadata, filename, cam_model, options, outputSize.width, outputSize.height);
+};
+
 // The main even loop for the application.
 
 static void event_loop(RPiCamMjpegApp &app)
@@ -38,7 +48,6 @@ static void event_loop(RPiCamMjpegApp &app)
 	app.OpenCamera();
 	app.ConfigureViewfinder();
 	app.StartCamera();
-	auto start_time = std::chrono::high_resolution_clock::now();
 
 	for (;;)
 	{
@@ -59,40 +68,14 @@ static void event_loop(RPiCamMjpegApp &app)
 		// capture mode.
 		if (app.ViewfinderStream())
 		{
-			auto now = std::chrono::high_resolution_clock::now();
-			if (options->timeout && (now - start_time) > options->timeout.value)
-			{
-				app.StopCamera();
-				app.Teardown();
-				app.ConfigureStill();
-				app.StartCamera();
-			}
-			else
-			{
-				Stream *stream = app.ViewfinderStream();
-				StreamInfo info = app.GetStreamInfo(stream);
-				CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
-				BufferReadSync r(&app, completed_request->buffers[stream]);
-				const std::vector<libcamera::Span<uint8_t>> mem = r.Get();
-
-				LOG(1, "Viewfinder image received");
-				auto t = std::chrono::system_clock::to_time_t(now);
-				jpeg_save(mem, info, completed_request->metadata, "viewfinder" + std::to_string(t) + options->output, app.CameraModel(), options);
-			}
-		}
-		// In still capture mode, save a jpeg and quit.
-		else if (app.StillStream())
-		{
-			app.StopCamera();
-			LOG(1, "Still capture image received");
-
-			Stream *stream = app.StillStream();
+			Stream *stream = app.ViewfinderStream();
 			StreamInfo info = app.GetStreamInfo(stream);
-			CompletedRequestPtr &payload = std::get<CompletedRequestPtr>(msg.payload);
-			BufferReadSync r(&app, payload->buffers[stream]);
+			CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
+			BufferReadSync r(&app, completed_request->buffers[stream]);
 			const std::vector<libcamera::Span<uint8_t>> mem = r.Get();
-			jpeg_save(mem, info, payload->metadata, options->output, app.CameraModel(), options);
-			return;
+			mjpeg_save(mem, info, completed_request->metadata, options->output, app.CameraModel(), options, libcamera::Size(100, 100));
+
+			LOG(1, "Viewfinder image received");
 		}
 	}
 }

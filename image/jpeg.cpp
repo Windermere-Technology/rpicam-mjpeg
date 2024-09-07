@@ -571,7 +571,8 @@ static void create_exif_data(std::vector<libcamera::Span<uint8_t>> const &mem, S
 }
 
 void jpeg_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, ControlList const &metadata,
-			   std::string const &filename, std::string const &cam_model, StillOptions const *options)
+			   std::string const &filename, std::string const &cam_model, StillOptions const *options,
+			   const unsigned int output_width, const unsigned int output_height)
 {
 	FILE *fp = nullptr;
 	uint8_t *thumb_buffer = nullptr;
@@ -595,7 +596,8 @@ void jpeg_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo cons
 		// YUV422 or YUV420 planar format).
 
 		jpeg_mem_len_t jpeg_len;
-		YUV_to_JPEG((uint8_t *)(mem[0].data()), info, info.width, info.height, options->quality, options->restart,
+
+		YUV_to_JPEG((uint8_t *)(mem[0].data()), info, output_width, output_height, options->quality, options->restart,
 					jpeg_buffer, jpeg_len);
 		LOG(2, "JPEG size is " << jpeg_len);
 
@@ -633,4 +635,10 @@ void jpeg_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo cons
 		free(jpeg_buffer);
 		throw;
 	}
+}
+
+void jpeg_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, ControlList const &metadata,
+			   std::string const &filename, std::string const &cam_model, StillOptions const *options)
+{
+    jpeg_save(mem, info, metadata, filename, cam_model, options, info.width, info.height);
 }
