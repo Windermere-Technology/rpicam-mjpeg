@@ -8,6 +8,13 @@
 #include <chrono>
 #include <string>
 #include <cassert>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <thread>
+#include <map>
+#include <sys/mman.h>
 
 #include "core/rpicam_app.hpp"
 #include "core/mjpeg_options.hpp"
@@ -16,8 +23,26 @@
 
 #include <libcamera/control_ids.h>
 
+
+#include <libcamera/libcamera.h>
+#include <libcamera/camera_manager.h>
+#include <libcamera/framebuffer_allocator.h>
+#include <libcamera/request.h>
+#include <libcamera/stream.h>
+
+
 using namespace std::placeholders;
 using libcamera::Stream;
+
+
+using namespace libcamera;
+using namespace std::chrono_literals;
+
+// Global shared pointer to the camera
+static std::shared_ptr<Camera> camera;
+// static bool videoRecording = true;  // Flag to control video recording
+
+std::ofstream rawVideoFile;  // Raw file to store YUV frames
 
 class RPiCamMjpegApp : public RPiCamApp
 {
@@ -47,11 +72,39 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
     assert(false && "TODO: Implement still_save");
 };
 
+// static void video_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
+// 			   std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
+// {
+//     assert(false && "TODO: Implement video_save");
+// };
+
 static void video_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
-			   std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
+                       std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
 {
-    assert(false && "TODO: Implement video_save");
-};
+    if (!rawVideoFile.is_open())
+    {
+        rawVideoFile.open(filename, std::ios::binary | std::ios::out);
+        if (!rawVideoFile.is_open())
+        {
+            throw std::runtime_error("Failed to open raw video file");
+        }
+    }
+
+    // Access the frame data (YUV format)
+    const libcamera::Span<uint8_t> &span = mem[0];  // Only using the first plane
+
+    // Write the raw YUV frame to the video file
+    rawVideoFile.write(reinterpret_cast<const char *>(span.data()), span.size());
+}
+
+// static void stop_video_recording()
+// {
+//     if (rawVideoFile.is_open())
+//     {
+//         rawVideoFile.close();
+//     }
+// }
+
 
 // The main even loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
