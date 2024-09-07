@@ -7,9 +7,10 @@
 
 #include <chrono>
 #include <string>
+#include <cassert>
 
 #include "core/rpicam_app.hpp"
-#include "core/still_options.hpp"
+#include "core/mjpeg_options.hpp"
 
 #include "image/image.hpp"
 
@@ -22,32 +23,47 @@ class RPiCamMjpegApp : public RPiCamApp
 {
 public:
 	RPiCamMjpegApp()
-		: RPiCamApp(std::make_unique<StillOptions>())
+		: RPiCamApp(std::make_unique<MjpegOptions>())
 	{
 	}
 
-	StillOptions *GetOptions() const
+	MjpegOptions *GetOptions() const
 	{
-		return static_cast<StillOptions *>(options_.get());
+		return static_cast<MjpegOptions *>(options_.get());
 	}
 };
 
-static void mjpeg_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
-			   std::string const &filename, std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize)
+static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
+			   std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
 {
     // TODO: Review if RaspiMJPEG allows arbitrary resolutions (which this supports).
     // If it doesn't, and we get multi-streams back from the camera working we can do the resize on the camera hardware directly.
     jpeg_save(mem, info, metadata, filename, cam_model, options, outputSize.width, outputSize.height);
 };
 
-// The main even loop for the application.
+static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
+			   std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
+{
+    assert(false && "TODO: Implement still_save");
+};
 
+static void video_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
+			   std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
+{
+    assert(false && "TODO: Implement video_save");
+};
+
+// The main even loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
-	StillOptions const *options = app.GetOptions();
+	MjpegOptions const *options = app.GetOptions();
 	app.OpenCamera();
 	app.ConfigureViewfinder();
 	app.StartCamera();
+
+	bool preview_active = options->stream == "preview";
+	bool still_active = options->stream == "still";
+	bool video_active = options->stream == "video";
 
 	for (;;)
 	{
@@ -73,7 +89,21 @@ static void event_loop(RPiCamMjpegApp &app)
 			CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
 			BufferReadSync r(&app, completed_request->buffers[stream]);
 			const std::vector<libcamera::Span<uint8_t>> mem = r.Get();
-			mjpeg_save(mem, info, completed_request->metadata, options->output, app.CameraModel(), options, libcamera::Size(100, 100));
+
+			if (preview_active) {
+    			preview_save(mem, info, completed_request->metadata, options->output,
+                           app.CameraModel(), options, libcamera::Size(100, 100));
+			}
+
+            if (still_active) {
+     			still_save(mem, info, completed_request->metadata, options->output,
+                           app.CameraModel(), options, libcamera::Size(100, 100));
+            }
+
+            if (video_active) {
+     			video_save(mem, info, completed_request->metadata, options->output,
+                           app.CameraModel(), options, libcamera::Size(100, 100));
+            }
 
 			LOG(1, "Viewfinder image received");
 		}
@@ -85,13 +115,19 @@ int main(int argc, char *argv[])
 	try
 	{
 		RPiCamMjpegApp app;
-		StillOptions *options = app.GetOptions();
+		MjpegOptions *options = app.GetOptions();
 		if (options->Parse(argc, argv))
 		{
 			if (options->verbose >= 2)
 				options->Print();
 			if (options->output.empty())
 				throw std::runtime_error("output file name required");
+			if (options->stream.empty())
+    			throw std::runtime_error("stream type required");
+            // This is janky... but we probably won't keep this
+            if (options->stream != "preview" && options->stream != "still" && options->stream != "video") {
+     			throw std::runtime_error("stream type must be one of: preview, still, video");
+            }
 
 			event_loop(app);
 		}
