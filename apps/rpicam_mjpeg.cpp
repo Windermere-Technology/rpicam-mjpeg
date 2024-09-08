@@ -1,48 +1,22 @@
-/* SPDX-License-Identifier: BSD-2-Clause */
-/*
- * Copyright (C) 2020, Raspberry Pi (Trading) Ltd.
- *
- * rpicam_jpeg.cpp - minimal libcamera jpeg capture app.
- */
-
 #include <chrono>
 #include <string>
 #include <cassert>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <memory>
-#include <thread>
-#include <map>
-#include <sys/mman.h>
-
 #include "core/rpicam_app.hpp"
 #include "core/mjpeg_options.hpp"
-
 #include "image/image.hpp"
-
 #include <libcamera/control_ids.h>
 
-
-#include <libcamera/libcamera.h>
-#include <libcamera/camera_manager.h>
-#include <libcamera/framebuffer_allocator.h>
-#include <libcamera/request.h>
-#include <libcamera/stream.h>
-
+// video recording 
+#include "core/rpicam_encoder.hpp"
+#include "output/file_output.hpp"
+#include "encoder/encoder.hpp"  
 
 using namespace std::placeholders;
 using libcamera::Stream;
 
-
-using namespace libcamera;
-using namespace std::chrono_literals;
-
-// Global shared pointer to the camera
-static std::shared_ptr<Camera> camera;
-// static bool videoRecording = true;  // Flag to control video recording
-
-std::ofstream rawVideoFile;  // Raw file to store YUV frames
+// Declare global encoder and file output
+Encoder* h264Encoder = nullptr;
+std::unique_ptr<FileOutput> h264FileOutput;  // Use unique_ptr for managing the file output
 
 class RPiCamMjpegApp : public RPiCamApp
 {
@@ -58,11 +32,31 @@ public:
 	}
 };
 
+// helper fucntions 
+// Function to initialize the encoder and file output
+
+void initialize_encoder(VideoOptions& videoOptions, const StreamInfo& info) {
+    if (!h264Encoder) {
+        LOG(1, "Initializing encoder...");
+        h264Encoder = Encoder::Create(&videoOptions, info);  // Pass VideoOptions and StreamInfo
+        if (!h264Encoder) {
+            LOG_ERROR("Failed to create encoder.");
+            return;
+        }
+    }
+
+    if (!h264FileOutput) {
+        LOG(1, "Initializing FileOutput...");
+        h264FileOutput = std::make_unique<FileOutput>(&videoOptions);  // Pass the VideoOptions object
+    }
+
+}
+
+
+
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
 			   std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
 {
-    // TODO: Review if RaspiMJPEG allows arbitrary resolutions (which this supports).
-    // If it doesn't, and we get multi-streams back from the camera working we can do the resize on the camera hardware directly.
     jpeg_save(mem, info, metadata, filename, cam_model, options, outputSize.width, outputSize.height);
 };
 
@@ -72,51 +66,59 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
     assert(false && "TODO: Implement still_save");
 };
 
-// static void video_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
-// 			   std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
-// {
-//     assert(false && "TODO: Implement video_save");
-// };
-
-static void video_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
-                       std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
+// video_save function with global encoder and file output
+static void video_save(const std::vector<libcamera::Span<uint8_t>>& mem, const StreamInfo& info, 
+                       const libcamera::ControlList& metadata, const std::string& filename, 
+                       const std::string& cam_model, const MjpegOptions* options, libcamera::Size outputSize, 
+                       const CompletedRequestPtr& completed_request, Stream* stream) 
 {
-    if (!rawVideoFile.is_open())
-    {
-        rawVideoFile.open(filename, std::ios::binary | std::ios::out);
-        if (!rawVideoFile.is_open())
-        {
-            throw std::runtime_error("Failed to open raw video file");
-        }
-    }
+    VideoOptions videoOptions;
+    videoOptions.codec = "h264";  // Use H.264 codec for encoding
+    videoOptions.output = options->output;  // Output file path from MjpegOptions
 
-    // Access the frame data (YUV format)
-    const libcamera::Span<uint8_t> &span = mem[0];  // Only using the first plane
+    // Initialize encoder and file output if not already initialized
+    initialize_encoder(videoOptions, info);
 
-    // Write the raw YUV frame to the video file
-    rawVideoFile.write(reinterpret_cast<const char *>(span.data()), span.size());
+    // Get buffer to process
+    auto buffer = completed_request->buffers[stream];
+    int fd = buffer->planes()[0].fd.get();  // File descriptor of buffer
+    auto ts = metadata.get(libcamera::controls::SensorTimestamp);
+    int64_t timestamp_us = ts ? *ts : buffer->metadata().timestamp / 1000;  // Convert ns to us if needed
+
+    // Encode the buffer using the H.264 encoder
+    LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
+    h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
+
+    //  Manually invoke OutputReady - Write encoded data to file using FileOutput
+    h264FileOutput->OutputReady(mem[0].data(), mem[0].size(), timestamp_us, 0);
 }
 
-// static void stop_video_recording()
-// {
-//     if (rawVideoFile.is_open())
-//     {
-//         rawVideoFile.close();
-//     }
-// }
-
-
-// The main even loop for the application.
+// The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
+	
 	MjpegOptions const *options = app.GetOptions();
+	 // Properly declare and initialize MjpegOptions
+    MjpegOptions* mjpegOptions = static_cast<MjpegOptions*>(app.GetOptions());
+	// Create a new VideoOptions object
+    VideoOptions videoOptions;
+
+	 // Copy the fields that are common between MjpegOptions and VideoOptions
+    videoOptions.output = mjpegOptions->output;  // Assuming output exists in both
+    videoOptions.quality = mjpegOptions->quality;  // Copy MJPEG quality
+    videoOptions.keypress = mjpegOptions->keypress;  // Copy keypress option
+    videoOptions.signal = mjpegOptions->signal;  // Copy signal option
+
+    // Set the codec (default to "mjpeg" if necessary)
+    videoOptions.codec = "mjpeg";  // MJPEG is the codec being used
+
 	app.OpenCamera();
 	app.ConfigureViewfinder();
 	app.StartCamera();
-
 	bool preview_active = options->stream == "preview";
 	bool still_active = options->stream == "still";
 	bool video_active = options->stream == "video";
+
 
 	for (;;)
 	{
@@ -155,7 +157,7 @@ static void event_loop(RPiCamMjpegApp &app)
 
             if (video_active) {
      			video_save(mem, info, completed_request->metadata, options->output,
-                           app.CameraModel(), options, libcamera::Size(100, 100));
+                           app.CameraModel(), options, libcamera::Size(100, 100),completed_request, stream);
             }
 
 			LOG(1, "Viewfinder image received");
@@ -169,6 +171,7 @@ int main(int argc, char *argv[])
 	{
 		RPiCamMjpegApp app;
 		MjpegOptions *options = app.GetOptions();
+
 		if (options->Parse(argc, argv))
 		{
 			if (options->verbose >= 2)
