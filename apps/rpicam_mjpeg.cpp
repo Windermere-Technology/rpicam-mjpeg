@@ -8,6 +8,8 @@
 #include <chrono>
 #include <string>
 #include <cassert>
+#include <ctime>
+#include <iomanip>
 
 #include "core/rpicam_app.hpp"
 #include "core/mjpeg_options.hpp"
@@ -44,7 +46,37 @@ static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, Strea
 static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
 			   std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
 {
-    assert(false && "TODO: Implement still_save");
+    // Save a still every 3 seconds.
+    static std::time_t last_run_at = 0;
+    const std::time_t seconds_per_frame = 3;
+    std::time_t now = std::time(nullptr);
+
+    if (now - last_run_at < seconds_per_frame)
+        return;
+    last_run_at = now;
+
+    // Add the datetime to the filename.
+    std::string output_filename;
+    {
+        std::stringstream buffer;
+
+        // The part before the extension (if one exists)
+        size_t period_index = filename.rfind(".");
+        if (period_index == std::string::npos) period_index = filename.length();
+        buffer << filename.substr(0, period_index);
+
+        // The date/timestamp
+        std::time_t t = std::time(nullptr);
+        // As per silvanmelchior/userland/.../RaspiMJPEG.c:714... Is this really the best C++ could do?
+        buffer << std::put_time(std::localtime(&t), "%Y%m%d%H%M%S");
+
+        // The extension
+        buffer << filename.substr(period_index, filename.length());
+        output_filename = buffer.str();
+    }
+
+    jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
+    LOG(1, "Saved still capture: " + output_filename);
 };
 
 static void video_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
@@ -89,23 +121,22 @@ static void event_loop(RPiCamMjpegApp &app)
 			CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
 			BufferReadSync r(&app, completed_request->buffers[stream]);
 			const std::vector<libcamera::Span<uint8_t>> mem = r.Get();
+			LOG(2, "Viewfinder image received");
 
-			if (preview_active) {
-    			preview_save(mem, info, completed_request->metadata, options->output,
+            if (preview_active) {
+                preview_save(mem, info, completed_request->metadata, options->output,
                            app.CameraModel(), options, libcamera::Size(100, 100));
-			}
+            }
 
             if (still_active) {
-     			still_save(mem, info, completed_request->metadata, options->output,
-                           app.CameraModel(), options, libcamera::Size(100, 100));
+                still_save(mem, info, completed_request->metadata, options->output,
+                           app.CameraModel(), options, libcamera::Size(info.width, info.height));
             }
 
             if (video_active) {
-     			video_save(mem, info, completed_request->metadata, options->output,
-                           app.CameraModel(), options, libcamera::Size(100, 100));
+                video_save(mem, info, completed_request->metadata, options->output,
+                           app.CameraModel(), options, libcamera::Size(info.width, info.height));
             }
-
-			LOG(1, "Viewfinder image received");
 		}
 	}
 }
