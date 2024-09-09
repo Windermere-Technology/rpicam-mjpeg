@@ -103,21 +103,28 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
     // Add the datetime to the filename.
     std::string output_filename;
     {
-        std::stringstream buffer;
+         // The part before the extension (if one exists)
+         size_t period_index = filename.rfind(".");
+         if (period_index == std::string::npos) period_index = filename.length();
+         std::string name = filename.substr(0, period_index);
 
-        // The part before the extension (if one exists)
-        size_t period_index = filename.rfind(".");
-        if (period_index == std::string::npos) period_index = filename.length();
-        buffer << filename.substr(0, period_index);
+         // The date/timestamp
+         struct tm *tm = localtime(&now);
+         size_t time_buff_size = 4 + 2 + 2 + 2 + 2 + 2 + 1; // strftime(NULL, 0, "%Y%m%d%H%M%S", tm);
+         char *time_buff = (char*)calloc(time_buff_size, sizeof(*time_buff));
+         assert(time_buff);
+         // As per silvanmelchior/userland/.../RaspiMJPEG.c:714... surely there is a better way?
+         strftime(time_buff, time_buff_size, "%Y%m%d%H%M%S", tm);
+         std::string timestamp(time_buff);
+         free(time_buff);
 
-        // The date/timestamp
-        std::time_t t = std::time(nullptr);
-        // As per silvanmelchior/userland/.../RaspiMJPEG.c:714... Is this really the best C++ could do?
-        buffer << std::put_time(std::localtime(&t), "%Y%m%d%H%M%S");
+         // FIXME: This is the "better way" to print the timestamp, but when I create buffer we start getting "libav: cannot open input device" in *video_save*??
+         // std::stringstream buffer;
+         // buffer << std::put_time(std::localtime(&t), "%Y%m%d%H%M%S");
 
-        // The extension
-        buffer << filename.substr(period_index, filename.length());
-        output_filename = buffer.str();
+         // The extension
+         std::string extension = filename.substr(period_index, filename.length());
+         output_filename = name + timestamp + extension;
     }
 
     jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
