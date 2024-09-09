@@ -252,7 +252,7 @@ static void event_loop(RPiCamMjpegApp &app)
                            app.CameraModel(), options, libcamera::Size(100, 100), completed_request, stream);
             }
 
-            LOG(1, "Viewfinder image received");
+            LOG(2, "Viewfinder image received");
         }
     }
 }
