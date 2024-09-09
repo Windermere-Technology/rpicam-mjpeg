@@ -7,17 +7,51 @@ This is a small suite of libcamera-based applications to drive the cameras on a 
 Build
 -----
 
+### Step 1: Building libcamera
 * Build and install the raspberrypi/libcamera library; see documentation [here.](https://www.raspberrypi.com/documentation/computers/camera_software.html#building-libcamera)
   - **NOTE:** Do not use the `libcamera` packages from the official repositories, these are outdated.
-* Follow the official instructions to build rpicam-apps; see documentation [here.](https://www.raspberrypi.com/documentation/computers/camera_software.html#building-rpicam-apps)
-
-Once dependencies are installed, the build commands are:
-
+### Step 2: Building rpicam-apps
+1. First fetch the necessary dependencies for rpicam-apps.
+```bash
+sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev
+sudo apt install -y meson ninja-build
 ```
-# NOTE: `meson setup` only needs to be run once.
+2. Download a local copy of Raspberry Pi’s rpicam-apps GitHub repository:
+```bash
+git clone https://github.com/raspberrypi/rpicam-apps.git
+```
+3. Navigate into the root directory of the repository:
+```bash
+cd rpicam-apps
+```
+4. Configure the rpicam-apps build
+For desktop-based operating systems like Raspberry Pi OS:
+```bash
 meson setup build -Denable_libav=enabled -Denable_drm=enabled -Denable_egl=enabled -Denable_qt=enabled -Denable_opencv=disabled -Denable_tflite=disabled
+```
+
+> **NOTE: `meson setup` only needs to be run once.**
+
+
+5. Build rpicam-apps with the following command:
+```bash
 meson compile -C build
 ```
+
+Final Step (Optional)
+To install the `rpicam-apps` binaries system-wide, run:
+
+```bash
+sudo meson install -C build
+```
+
+> This allows you to use the binaries from anywhere in the terminal without needing to navigate to the build directory each time. If you are only testing locally, you can skip this step and run the binaries directly from the `build` directory.
+
+The official instructions to build rpicam-apps; see documentation [here.](https://www.raspberrypi.com/documentation/computers/camera_software.html#building-rpicam-apps)
+
+
+---
+
 
 Running rpicam-mjpeg
 --------------------
@@ -54,6 +88,7 @@ rpicam-mjpeg --stream video --output /tmp/vid.mp4
   - **NOTE:** Terminating with Ctrl+C will result in a corrupt video.
   - Output video is saved in the `/tmp` directory.
 
+---
 
 Clean and Rebuild
 ---------------------
