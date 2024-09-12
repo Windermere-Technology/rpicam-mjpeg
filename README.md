@@ -16,14 +16,6 @@ Build
 sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev libavdevice-dev
 sudo apt install -y meson ninja-build
 ```
-2. Download a local copy of Raspberry Pi’s rpicam-apps GitHub repository:
-```bash
-git clone https://github.com/raspberrypi/rpicam-apps.git
-```
-3. Navigate into the root directory of the repository:
-```bash
-cd rpicam-apps
-```
 4. Configure the rpicam-apps build
 For desktop-based operating systems like Raspberry Pi OS:
 ```bash
@@ -62,27 +54,27 @@ At this stage, the subcommands are not configured to run concurrently:
 ### 1. Preview Stream
 
 ```bash
-rpicam-mjpeg --stream preview --output /tmp/cam.jpg
+./build/apps/rpicam-mjpeg --stream preview --output /tmp/cam.jpg
 ```
-* `rpicam-mjpeg --stream preview --output /tmp/cam.jpg` will behave in a way similar to the RaspiMJPEG preview stream.
+* `./build/apps/rpicam-mjpeg --stream preview --output /tmp/cam.jpg` will behave in a way similar to the RaspiMJPEG preview stream.
   - Terminate with Ctrl+C
   - `open /tmp/cam.jpg` should resemble a video stream if image viewer supports live-reloading (such as default RPi image viewer)
     
 ### 2. Still Image Stream
 
 ```bash
-rpicam-mjpeg --stream still --output /tmp/cam.jpg
+./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg
 ```
-* `rpicam-mjpeg --stream still --output /tmp/cam.jpg` will save a timestamped JPEG every 3 seconds.
+* `./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg` will save a timestamped JPEG every 3 seconds.
   - Terminate with Ctrl+C.
   - Output files are saved in the `/tmp` directory.
     
 ### 3. Video Stream
 
 ```bash
-rpicam-mjpeg --stream video --output /tmp/vid.mp4
+./build/apps/rpicam-mjpeg --stream video --output /tmp/vid.mp4
 ```
-* `rpicam-mjpeg --stream video --output /tmp/vid.mp4` will save a 5s MP4 video.
+* `./build/apps/rpicam-mjpeg --stream video --output /tmp/vid.mp4` will save a 5s MP4 video.
   - Automatically terminate after finishing the 5-second recording.
   - Alternatively, you can manually terminate the process by closing the popup window.
   - **NOTE:** Terminating with Ctrl+C will result in a corrupt video.
@@ -103,7 +95,7 @@ If you need to clean the build and start fresh, follow these steps:
 
 ### 1. Remove the existing build directory:
 ```bash
-rm -rf /home/pi/p05a-rpicam-apps/build
+rm -rf ./build
 ```
 
 ### 2. Set up and rebuild the project:
