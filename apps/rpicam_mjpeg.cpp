@@ -220,7 +220,9 @@ static void event_loop(RPiCamMjpegApp &app)
         // Check if there are any commands over the FIFO.
         std::string fifo_command = app.GetFifoCommand();
         if (fifo_command != "") {
-            LOG(1, "Got command from FIFO: " + fifo_command);
+            LOG(2, "Got command from FIFO: " + fifo_command);
+            if (fifo_command == "im")
+                still_active = true; // Take a picture :)
         }
 
         // If video is active, check the elapsed time and limit to 5 seconds
@@ -264,8 +266,12 @@ static void event_loop(RPiCamMjpegApp &app)
             }
 
             if (still_active) {
+                // TODO: This will ignore subsequent "im" commands in a 3s period.
+                // - We need some kind of mechanism to reset the timer inside of still_save.
                 still_save(mem, info, completed_request->metadata, options->output,
                            app.CameraModel(), options, libcamera::Size(info.width, info.height));
+                // If still_active was set due to an "im" command, it should not keep running.
+                still_active = options->stream == "still";
             }
 
             if (video_active) {
