@@ -213,7 +213,7 @@ static void event_loop(RPiCamMjpegApp &app)
     bool video_active = options->stream == "video";
 
     // If video recording is active, set up a 5-second limit
-    const int duration_limit_seconds = 5;
+    int duration_limit_seconds = 5;
     auto start_time = std::chrono::steady_clock::now();
 
     for (;;)
@@ -242,8 +242,19 @@ static void event_loop(RPiCamMjpegApp &app)
             if (tokens[0] == "im"){
                 still_active = true; // Take a picture :)
 			} else if (tokens[0] == "ca") {
-				
-
+				int length = tokens.size();
+				if (length > 2 && tokens[1] == "1") {
+					if (tokens[2] == "t") {
+						video_active = true; 
+						duration_limit_seconds = std::stoi(tokens[3]);
+					}
+				} else if (tokens[1] == "1") {
+					video_active = true; 
+				} else {
+					;
+				}
+			} else {
+				;
 			}
         }
 
@@ -252,8 +263,8 @@ static void event_loop(RPiCamMjpegApp &app)
             auto current_time = std::chrono::steady_clock::now();
             auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
 
-            if (elapsed_time >= duration_limit_seconds) {
-                LOG(1, "5-second video recording limit reached. Stopping.");
+            if (elapsed_time >= duration_limit_seconds) {				
+				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
                 
                 // Clean up encoder and file output
                 app.cleanup();
