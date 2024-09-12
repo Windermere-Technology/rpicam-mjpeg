@@ -20,11 +20,13 @@ struct MjpegOptions : public StillOptions
 		// clang-format off
 		options_.add_options()
 			("stream", value<std::string>(&stream), "Select the output stream type (preview, still or video)")
+			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
 			;
 		// clang-format on
 	}
 
 	std::string stream;
+	std::string fifo;
 
 	virtual void Print() const override
 	{
@@ -47,6 +49,7 @@ struct MjpegOptions : public StillOptions
 		std::cerr << "    AF on capture: " << af_on_capture << std::endl;
 		std::cerr << "    Zero shutter lag: " << zsl << std::endl;
 		std::cerr << "    Stream: " << stream << std::endl;
+		std::cerr << "    FIFO: " << fifo << std::endl;
 		for (auto &s : exif)
 			std::cerr << "    EXIF: " << s << std::endl;
 	}
