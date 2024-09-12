@@ -13,7 +13,7 @@ Build
 ### Step 2: Building rpicam-apps
 1. First fetch the necessary dependencies for rpicam-apps.
 ```bash
-sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev
+sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev libavdevice-dev
 sudo apt install -y meson ninja-build
 ```
 2. Download a local copy of Raspberry Pi’s rpicam-apps GitHub repository:
