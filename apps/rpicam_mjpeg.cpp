@@ -80,6 +80,22 @@ public:
             h264FileOutput.reset();  // Free the file output resources
         }
     }
+
+    // FIXME: This name is terrible!
+    // TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
+    std::string GetFifoCommand()
+    {
+        static std::string fifo_path = GetOptions()->fifo;
+        static std::ifstream fifo { fifo_path };
+
+        if (fifo_path == "") return "";
+
+        std::string command;
+        std::getline(fifo, command);
+        // Reset EOF flag, so we can read in the future.
+        if (fifo.eof()) fifo.clear();
+        return command;
+    }
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
@@ -201,6 +217,12 @@ static void event_loop(RPiCamMjpegApp &app)
 
     for (;;)
     {
+        // Check if there are any commands over the FIFO.
+        std::string fifo_command = app.GetFifoCommand();
+        if (fifo_command != "") {
+            LOG(1, "Got command from FIFO: " + fifo_command);
+        }
+
         // If video is active, check the elapsed time and limit to 5 seconds
         if (video_active) {
             auto current_time = std::chrono::steady_clock::now();
