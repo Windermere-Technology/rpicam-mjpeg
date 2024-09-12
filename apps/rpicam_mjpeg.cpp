@@ -85,6 +85,7 @@ public:
     // TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
     std::string GetFifoCommand()
     {
+		std::cout << ">>> get in to the GetFifoCommand()" << std::endl; //delete
         static std::string fifo_path = GetOptions()->fifo;
         static std::ifstream fifo { fifo_path };
 
@@ -219,10 +220,31 @@ static void event_loop(RPiCamMjpegApp &app)
     {
         // Check if there are any commands over the FIFO.
         std::string fifo_command = app.GetFifoCommand();
+		std::cout << ">>> fifo_command: " << fifo_command << std::endl; //delete
         if (fifo_command != "") {
             LOG(2, "Got command from FIFO: " + fifo_command);
-            if (fifo_command == "im")
+
+			//split the fifo_commamd by space
+			std::string delimiter = " ";
+			size_t pos = 0;
+			std::string token;
+			std::vector<std::string> tokens; // Vector to store tokens
+
+			while ((pos = fifo_command.find(delimiter)) != std::string::npos) {
+				token = fifo_command.substr(0, pos);
+				tokens.push_back(token); 
+				fifo_command.erase(0, pos + delimiter.length());
+			}
+
+			// Add the last token
+			tokens.push_back(fifo_command);
+						
+            if (tokens[0] == "im"){
                 still_active = true; // Take a picture :)
+			} else if (tokens[0] == "ca") {
+				
+
+			}
         }
 
         // If video is active, check the elapsed time and limit to 5 seconds
