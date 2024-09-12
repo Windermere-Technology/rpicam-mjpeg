@@ -88,6 +88,12 @@ rpicam-mjpeg --stream video --output /tmp/vid.mp4
   - **NOTE:** Terminating with Ctrl+C will result in a corrupt video.
   - Output video is saved in the `/tmp` directory.
 
+### 4. Multi Stream
+```bash
+rpicam-mjpeg --stream multi --output /tmp/vid.mp4
+```
+* `rpicam-mjpeg --stream video --output /tmp/vid.mp4` will save a 5s MP4 video `vid.mp4`, and `vid.mp4_preview.jpg`
+
 ---
 
 Clean and Rebuild
