@@ -177,13 +177,12 @@ static void video_save(RPiCamMjpegApp& app, const std::vector<libcamera::Span<ui
 static void event_loop(RPiCamMjpegApp &app)
 {
     MjpegOptions const *options = app.GetOptions();
-    MjpegOptions* mjpegOptions = static_cast<MjpegOptions*>(app.GetOptions());
 
     VideoOptions videoOptions;
-    videoOptions.output = mjpegOptions->output; // Assuming output exists in both
-    videoOptions.quality = mjpegOptions->quality; // Copy MJPEG quality
-    videoOptions.keypress = mjpegOptions->keypress; // Copy keypress option
-    videoOptions.signal = mjpegOptions->signal; // Copy signal option
+    videoOptions.output = options->output; // Assuming output exists in both
+    videoOptions.quality = options->quality; // Copy MJPEG quality
+    videoOptions.keypress = options->keypress; // Copy keypress option
+    videoOptions.signal = options->signal; // Copy signal option
     
 	// Set the codec (default to "mjpeg" if necessary)
 	videoOptions.codec = "mjpeg";  // MJPEG is the codec being used
