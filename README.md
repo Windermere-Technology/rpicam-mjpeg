@@ -13,7 +13,7 @@ Build
 ### Step 2: Building rpicam-apps
 1. First fetch the necessary dependencies for rpicam-apps.
 ```bash
-sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev
+sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev libavdevice-dev
 sudo apt install -y meson ninja-build
 ```
 4. Configure the rpicam-apps build
@@ -79,6 +79,12 @@ At this stage, the subcommands are not configured to run concurrently:
   - Alternatively, you can manually terminate the process by closing the popup window.
   - **NOTE:** Terminating with Ctrl+C will result in a corrupt video.
   - Output video is saved in the `/tmp` directory.
+
+### 4. Multi Stream
+```bash
+rpicam-mjpeg --stream multi --output /tmp/vid.mp4
+```
+* `rpicam-mjpeg --stream video --output /tmp/vid.mp4` will save a 5s MP4 video `vid.mp4`, and `vid.mp4_preview.jpg`
 
 ---
 

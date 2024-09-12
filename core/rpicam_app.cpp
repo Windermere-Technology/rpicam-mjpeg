@@ -603,6 +603,91 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 	LOG(2, "Video setup complete");
 }
 
+void RPiCamApp::ConfigureMultiStream(unsigned int flags)
+{
+    LOG(2, "=== Configuring multi-stream... ===");
+
+    StreamRoles stream_roles = { StreamRole::Viewfinder, StreamRole::VideoRecording };
+
+    // Add Raw stream if the no_raw option is not set
+    if (!options_->no_raw)
+        stream_roles.push_back(StreamRole::Raw);
+
+    // Generate configuration for the selected stream roles
+    configuration_ = camera_->generateConfiguration(stream_roles);
+    if (!configuration_)
+        throw std::runtime_error("failed to generate multi-stream configuration");
+
+    // Configure the Viewfinder
+    StreamConfiguration &viewfinder_cfg = configuration_->at(0);
+    viewfinder_cfg.pixelFormat = libcamera::formats::YUV420;
+    if (options_->width)
+        viewfinder_cfg.size.width = options_->width;
+    if (options_->height)
+        viewfinder_cfg.size.height = options_->height;
+    if (options_->buffer_count > 0)
+        viewfinder_cfg.bufferCount = options_->buffer_count;
+    else
+        viewfinder_cfg.bufferCount = 6;  // Default buffer count
+
+    post_processor_.AdjustConfig("viewfinder", &viewfinder_cfg);
+
+    // Configure the Video Recording
+    StreamConfiguration &video_cfg = configuration_->at(1);
+    video_cfg.pixelFormat = libcamera::formats::YUV420;
+    video_cfg.bufferCount = 6;  // Use 6 buffers by default
+    if (options_->buffer_count > 0)
+        video_cfg.bufferCount = options_->buffer_count;
+    if (options_->width)
+        video_cfg.size.width = options_->width;
+    if (options_->height)
+        video_cfg.size.height = options_->height;
+    if (flags & FLAG_VIDEO_JPEG_COLOURSPACE)
+        video_cfg.colorSpace = libcamera::ColorSpace::Sycc;
+    else if (video_cfg.size.width >= 1280 || video_cfg.size.height >= 720)
+        video_cfg.colorSpace = libcamera::ColorSpace::Rec709;
+    else
+        video_cfg.colorSpace = libcamera::ColorSpace::Smpte170m;
+
+    post_processor_.AdjustConfig("video", &video_cfg);
+
+    // Handling Raw stream if not disabled
+    if (!options_->no_raw)
+    {
+        options_->mode.update(video_cfg.size, options_->framerate);
+        options_->mode = selectMode(options_->mode);
+
+        StreamConfiguration &raw_cfg = configuration_->at(2);
+        raw_cfg.size = options_->mode.Size();
+        raw_cfg.pixelFormat = mode_to_pixel_format(options_->mode);
+        raw_cfg.bufferCount = video_cfg.bufferCount;
+
+        configuration_->sensorConfig = libcamera::SensorConfiguration();
+        configuration_->sensorConfig->outputSize = options_->mode.Size();
+        configuration_->sensorConfig->bitDepth = options_->mode.bit_depth;
+    }
+
+    // Set orientation for the streams
+    configuration_->orientation = libcamera::Orientation::Rotate0 * options_->transform;
+
+    // Apply denoise configuration
+    configureDenoise(options_->denoise == "auto" ? "cdn_fast" : options_->denoise);
+
+    // Finalize the capture setup
+    setupCapture();
+
+    // Map the streams to their names
+    streams_["viewfinder"] = viewfinder_cfg.stream();
+    streams_["video"] = video_cfg.stream();
+    if (!options_->no_raw)
+        streams_["raw"] = configuration_->at(2).stream();
+
+    // Final post-processing configuration
+    post_processor_.Configure();
+
+    LOG(2, "Multi-stream setup complete");
+}
+
 void RPiCamApp::Teardown()
 {
 	stopPreview();

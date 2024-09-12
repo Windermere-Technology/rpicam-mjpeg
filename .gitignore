@@ -1,6 +1,6 @@
 build
 *~
-.jpeg
-.jpg
-.mp4
+*.jpeg
+*.jpg
+*.mp4
 .vscode/

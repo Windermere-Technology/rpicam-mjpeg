@@ -138,6 +138,7 @@ public:
 	void ConfigureStill(unsigned int flags = FLAG_STILL_NONE);
 	void ConfigureVideo(unsigned int flags = FLAG_VIDEO_NONE);
 	void ConfigureZsl(unsigned int still_flags = FLAG_STILL_NONE);
+	void ConfigureMultiStream(unsigned int flags);
 
 	void Teardown();
 	void StartCamera();
