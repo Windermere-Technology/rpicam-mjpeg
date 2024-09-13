@@ -89,11 +89,9 @@ static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, Strea
 {
     std::string output_filename = filename;
 
-    // Append "_preview.jpg" if multi-stream is enabled, otherwise just append ".jpg"
+    // Append "_preview.jpg" if multi-stream is enabled
     if (multiStream) {
         output_filename += "_preview.jpg";
-    } else {
-        output_filename += ".jpg";
     }
 
     jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
@@ -235,7 +233,7 @@ static void event_loop(RPiCamMjpegApp &app)
     for (;;)
     {
         // Check the elapsed time and limit to 5 seconds
-        if (video_active || multi_active || still_active)
+        if (video_active || multi_active)
         {
             auto current_time = std::chrono::steady_clock::now();
             auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
