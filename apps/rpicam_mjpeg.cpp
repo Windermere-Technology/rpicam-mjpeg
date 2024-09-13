@@ -85,7 +85,7 @@ public:
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
-                         std::string const &filename, std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize, bool multiStream)
+                         std::string const &filename, std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize, bool multiStream)
 {
     std::string output_filename = filename;
 
@@ -100,7 +100,7 @@ static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, Strea
 
 static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
 					   libcamera::ControlList const &metadata, std::string const &filename,
-					   std::string const &cam_model, MjpegOptions const *options, libcamera::Size outputSize)
+					   std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize)
 {
 	// Save a still every 3 seconds.
 	static std::time_t last_run_at = 0;
@@ -146,16 +146,15 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
 // video_save function using app to manage encoder and file output
 static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<uint8_t>> &mem, const StreamInfo &info,
 					   const libcamera::ControlList &metadata, const std::string &filename,
-					   const std::string &cam_model, const MjpegOptions *options, libcamera::Size outputSize,
+					   const std::string &cam_model, VideoOptions &options, libcamera::Size outputSize,
 					   const CompletedRequestPtr &completed_request, Stream *stream)
 {
-	VideoOptions videoOptions;
-	videoOptions.codec = "h264"; // Use H.264 codec for encoding
-	videoOptions.framerate = 15; // frames!!!!!
-	videoOptions.output = options->output; // Output file path from MjpegOptions
+	// TODO: This probably shouldn't be setting these?
+	options.codec = "h264"; // Use H.264 codec for encoding
+	options.framerate = 15; // frames!!!!!
 
 	// Use the app instance to call initialize_encoder
-	app.initialize_encoder(videoOptions, info);
+	app.initialize_encoder(options, info);
 
 	// Check if the encoder and file output were successfully initialized
 	if (!app.h264Encoder)
@@ -191,23 +190,15 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
-    MjpegOptions const *options = app.GetOptions();
-    MjpegOptions* mjpegOptions = static_cast<MjpegOptions*>(app.GetOptions());
-
-    VideoOptions videoOptions;
-    videoOptions.output = mjpegOptions->output; // Assuming output exists in both
-    videoOptions.quality = mjpegOptions->quality; // Copy MJPEG quality
-    videoOptions.keypress = mjpegOptions->keypress; // Copy keypress option
-    videoOptions.signal = mjpegOptions->signal; // Copy signal option
-    // Set the codec (default to "mjpeg" if necessary)
-    videoOptions.codec = "mjpeg";  // MJPEG is the codec being used
+    MjpegOptions *options = app.GetOptions();
 
     app.OpenCamera();
 
-    bool preview_active = options->stream == "preview";
-    bool still_active = options->stream == "still";
-    bool video_active = options->stream == "video";
-    bool multi_active = options->stream == "multi";
+    bool preview_active = !options->previewOptions.output.empty();
+    bool still_active = !options->stillOptions.output.empty();
+    bool video_active = !options->videoOptions.output.empty();
+	// TODO: Remove this variable altogether... eventually
+    bool multi_active = ((int)preview_active + (int)still_active + (int)video_active) > 1;
 
     if (multi_active)
     {
@@ -269,16 +260,21 @@ static void event_loop(RPiCamMjpegApp &app)
             BufferReadSync r(&app, completed_request->buffers[viewfinder_stream]);
             const std::vector<libcamera::Span<uint8_t>> viewfinder_mem = r.Get();
 
-            if (preview_active || multi_active) 
-            {
-                // Save the preview image
-                preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
-                            app.CameraModel(), options, libcamera::Size(100, 100), multi_active);  // Adjust size as needed
+            if (still_active) {
+                // Save still image instead of preview when still_active is set
+                still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
+                           app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
+                LOG(2, "Still image saved");
+            }
+            else if (preview_active || multi_active) {
+                // Save preview if not in still mode
+                preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->previewOptions.output,
+                             app.CameraModel(), &options->previewOptions, libcamera::Size(100, 100), multi_active);
                 LOG(2, "Viewfinder (Preview) image saved");
             }
             else if (still_active) {
                 still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
-                            app.CameraModel(), options, libcamera::Size(viewfinder_info.width, viewfinder_info.height));
+                            app.CameraModel(), &options->stillOptions, libcamera::Size(viewfinder_info.width, viewfinder_info.height));
                 LOG(2, "Still image saved");
             }
         }
@@ -291,10 +287,9 @@ static void event_loop(RPiCamMjpegApp &app)
             BufferReadSync r(&app, completed_request->buffers[video_stream]);
             const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
 
-            if (video_active || multi_active) 
-            {
-                video_save(app, video_mem, video_info, completed_request->metadata, options->output,
-                           app.CameraModel(), options, libcamera::Size(video_info.width, video_info.height),
+            if (video_active || multi_active) {
+                video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
+                           app.CameraModel(), options->videoOptions, libcamera::Size(video_info.width, video_info.height),
                            completed_request, video_stream);
                 LOG(2, "Video recorded and saved");
             }
@@ -315,16 +310,13 @@ int main(int argc, char *argv[])
         {
             if (options->verbose >= 2)
                 options->Print();
-            if (options->output.empty())
-                throw std::runtime_error("output file name required");
-            if (options->stream.empty())
-                throw std::runtime_error("stream type required");
-            if (options->stream != "preview" && options->stream != "still" && options->stream != "video" && options->stream != "multi") {
-                throw std::runtime_error("stream type must be one of: preview, still, video");
-            }
-            if (options->stream == "multi"){
-                std::cout << "==== Starting multistream ====" << std::endl;
-            }
+
+			if (
+				options->previewOptions.output.empty()
+				&& options->stillOptions.output.empty()
+				&& options->videoOptions.output.empty()
+			)
+				throw std::runtime_error("At least one of --preview-output, --still-output or --video-output should be provided.");
 
             event_loop(app);
         }

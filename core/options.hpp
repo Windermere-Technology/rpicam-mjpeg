@@ -179,7 +179,7 @@ struct Options
 	virtual bool Parse(int argc, char *argv[]);
 	virtual void Print() const;
 
-	void SetApp(RPiCamApp *app) { app_ = app; }
+	virtual void SetApp(RPiCamApp *app) { app_ = app; }
 	Platform GetPlatform() const { return platform_; };
 
 protected:
