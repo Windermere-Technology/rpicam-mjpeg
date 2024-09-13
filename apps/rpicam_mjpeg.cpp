@@ -190,6 +190,70 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
 }
 
+// motion vector extraction function from standalone motion vector app
+void extractMotionVectors(const std::string& videoFile, const std::string& outputFile) {
+    // Construct the FFmpeg command to extract motion vectors
+    std::string ffmpegCommand = "ffmpeg -flags2 +export_mvs -i " + videoFile + 
+                                " -vf codecview=mv=pf+bf+bb " + outputFile + " -y";
+
+    // Run the FFmpeg command
+    std::cout << "Executing FFmpeg command to extract motion vectors..." << std::endl;
+    system(ffmpegCommand.c_str());
+    std::cout << "Motion vectors extracted to " << outputFile << std::endl;
+}
+
+
+// motion_vector function
+static void motion_vector(RPiCamMjpegApp &app, const std::vector<libcamera::Span<uint8_t>> &mem, const StreamInfo &info,
+					   const libcamera::ControlList &metadata, const std::string &filename,
+					   const std::string &cam_model, const MjpegOptions *options, libcamera::Size outputSize,
+					   const CompletedRequestPtr &completed_request, Stream *stream)
+{
+	VideoOptions videoOptions;
+	videoOptions.codec = "h264"; // Use H.264 codec for encoding
+	videoOptions.framerate = 15; // frames!!!!!
+	videoOptions.output = options->output; // Output file path from MjpegOptions
+
+	// Use the app instance to call initialize_encoder
+	app.initialize_encoder(videoOptions, info);
+
+	// Check if the encoder and file output were successfully initialized
+	if (!app.h264Encoder)
+	{
+		LOG_ERROR("Failed to initialize encoder.");
+		return;
+	}
+
+	if (!app.h264FileOutput)
+	{
+		LOG_ERROR("Failed to initialize file output.");
+		return;
+	}
+
+	// Get buffer to process
+	auto buffer = completed_request->buffers[stream];
+	int fd = buffer->planes()[0].fd.get(); // File descriptor of buffer
+	auto ts = metadata.get(libcamera::controls::SensorTimestamp);
+	int64_t timestamp_us = ts ? (*ts / 1000) : (buffer->metadata().timestamp / 1000);
+
+	// Ensure buffer is valid before encoding
+	if (mem.empty() || mem[0].size() == 0)
+	{
+		LOG_ERROR("Buffer is empty, cannot proceed.");
+		return;
+	}
+
+	// Encode the buffer using the H.264 encoder
+	LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
+	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
+
+
+	std::string outputFile = std::string(options->output);  // Assuming it's a C-style string
+
+	// Extract motion vectors using FFmpeg
+	extractMotionVectors(outputFile, "/tmp/motion_vectors_output.mp4");
+}
+
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -212,13 +276,27 @@ static void event_loop(RPiCamMjpegApp &app)
     bool video_active = options->stream == "video";
     bool multi_active = options->stream == "multi";
 
+	bool motion_active = options->stream == "motion";
+
     if (multi_active)
     {
         // Call the multi-stream configuration function
         app.ConfigureMultiStream(0); // Flags can be passed as needed
         app.StartCamera();
     }
-    else
+    else if (video_active)
+    {
+        app.ConfigureVideo();
+        app.StartCamera();
+    }
+	
+	else if (motion_active)
+    {
+        app.ConfigureVideo();
+        app.StartCamera();
+    }
+
+    else if (preview_active || still_active)
     {
         app.ConfigureViewfinder();
         app.StartCamera();
@@ -231,6 +309,17 @@ static void event_loop(RPiCamMjpegApp &app)
     for (;;)
     {
         if (video_active || multi_active) {
+            auto current_time = std::chrono::steady_clock::now();
+            auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+
+            if (elapsed_time >= duration_limit_seconds) {
+                LOG(1, "5-second video recording limit reached. Stopping.");
+                app.cleanup();
+                break;
+            }
+        }
+
+		if (motion_active || multi_active) {
             auto current_time = std::chrono::steady_clock::now();
             auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
 
@@ -264,17 +353,17 @@ static void event_loop(RPiCamMjpegApp &app)
             BufferReadSync r(&app, completed_request->buffers[viewfinder_stream]);
             const std::vector<libcamera::Span<uint8_t>> viewfinder_mem = r.Get();
 
-            if (still_active) {
-                // Save still image instead of preview when still_active is set
-                still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
-                           app.CameraModel(), options, libcamera::Size(3200, 2400));
-                LOG(2, "Still image saved");
-            }
-            else if (preview_active || multi_active) {
-                // Save preview if not in still mode
+            if (preview_active || multi_active) 
+            {
+                // Save the preview image
                 preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
-                             app.CameraModel(), options, libcamera::Size(100, 100), multi_active);
+                            app.CameraModel(), options, libcamera::Size(100, 100), multi_active);  // Adjust size as needed
                 LOG(2, "Viewfinder (Preview) image saved");
+            }
+            else if (still_active) {
+                still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
+                            app.CameraModel(), options, libcamera::Size(viewfinder_info.width, viewfinder_info.height));
+                LOG(2, "Still image saved");
             }
         }
 
@@ -291,6 +380,13 @@ static void event_loop(RPiCamMjpegApp &app)
                            app.CameraModel(), options, libcamera::Size(video_info.width, video_info.height),
                            completed_request, video_stream);
                 LOG(2, "Video recorded and saved");
+            }
+
+			if (motion_active) {
+                LOG(1, "working...");
+				motion_vector(app, video_mem, video_info, completed_request->metadata, options->output,
+                           app.CameraModel(), options, libcamera::Size(video_info.width, video_info.height),
+                           completed_request, video_stream);
             }
         }
 
@@ -313,8 +409,8 @@ int main(int argc, char *argv[])
                 throw std::runtime_error("output file name required");
             if (options->stream.empty())
                 throw std::runtime_error("stream type required");
-            if (options->stream != "preview" && options->stream != "still" && options->stream != "video" && options->stream != "multi") {
-                throw std::runtime_error("stream type must be one of: preview, still, video");
+            if (options->stream != "preview" && options->stream != "still" && options->stream != "video" && options->stream != "multi" && options->stream != "motion") {
+                throw std::runtime_error("stream type must be one of: preview, still, video, motion");
             }
             if (options->stream == "multi"){
                 std::cout << "==== Starting multistream ====" << std::endl;
@@ -331,33 +427,4 @@ int main(int argc, char *argv[])
         return -1;
     }
     return 0;
-	try
-	{
-		RPiCamMjpegApp app;
-		MjpegOptions *options = app.GetOptions();
-
-		if (options->Parse(argc, argv))
-		{
-			if (options->verbose >= 2)
-				options->Print();
-			if (options->output.empty())
-				throw std::runtime_error("output file name required");
-			if (options->stream.empty())
-				throw std::runtime_error("stream type required");
-			if (options->stream != "preview" && options->stream != "still" && options->stream != "video")
-			{
-				throw std::runtime_error("stream type must be one of: preview, still, video");
-			}
-
-			event_loop(app);
-		}
-		// Call cleanup after the event loop
-		app.cleanup();
-	}
-	catch (std::exception const &e)
-	{
-		LOG_ERROR("ERROR: *** " << e.what() << " ***");
-		return -1;
-	}
-	return 0;
 }
