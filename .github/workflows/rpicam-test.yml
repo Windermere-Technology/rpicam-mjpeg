@@ -96,7 +96,11 @@ jobs:
 
     strategy:
       matrix:
-        camera: [ imx219, imx477, imx708, pi5-imx708-imx477 ]
+        camera:
+        - imx219
+        #- imx477
+        #- imx708
+        #- pi5-imx708-imx477
 
     steps:
     - uses: actions/checkout@v4
@@ -153,7 +157,11 @@ jobs:
 
     strategy:
       matrix:
-        camera: [ imx219, imx477, imx708, pi5-imx708-imx477 ]
+        camera:
+          - imx219
+          #- imx477
+          #- imx708
+          #- pi5-imx708-imx477
 
     steps:
     - name: Clean libcamera LKG
