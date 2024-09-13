@@ -22,10 +22,22 @@ struct MjpegOptions : public Options
 		options_.add_options()
 			("preview-output", value<std::string>(&previewOptions.output),
 				"Set the preview output file name")
+			("preview-width", value<unsigned int>(&previewOptions.width)->default_value(0),
+				"Set the output preview width (0 = use default value)")
+			("preview-height", value<unsigned int>(&previewOptions.height)->default_value(0),
+				"Set the output preview height (0 = use default value)")
 			("video-output", value<std::string>(&videoOptions.output),
 				"Set the video output file name")
+			("video-width", value<unsigned int>(&videoOptions.width)->default_value(0),
+				"Set the output video width (0 = use default value)")
+			("video-height", value<unsigned int>(&videoOptions.height)->default_value(0),
+				"Set the output video height (0 = use default value)")
 			("still-output", value<std::string>(&stillOptions.output),
 				"Set the still output file name")
+			("still-width", value<unsigned int>(&stillOptions.width)->default_value(0),
+				"Set the output still width (0 = use default value)")
+			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
+				"Set the output still height (0 = use default value)")
 			;
 		// clang-format on
 	}
@@ -37,7 +49,7 @@ struct MjpegOptions : public Options
 
 		if (previewOptions.Parse(argc, argv) == false)
 			return false;
-		
+
 		if (videoOptions.Parse(argc, argv) == false)
 			return false;
 

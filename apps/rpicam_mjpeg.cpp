@@ -268,8 +268,13 @@ static void event_loop(RPiCamMjpegApp &app)
             }
             else if (preview_active || multi_active) {
                 // Save preview if not in still mode
-                preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->previewOptions.output,
-                             app.CameraModel(), &options->previewOptions, libcamera::Size(100, 100), multi_active);
+				StillOptions const opts = options->previewOptions;
+				// If opts.width == 0, we should use "the default"
+				auto width = opts.width ? opts.width : viewfinder_info.width;
+				auto height = opts.height ? opts.height : viewfinder_info.height;
+                preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata,
+                             opts.output, app.CameraModel(), &opts,
+							 libcamera::Size(width, height), multi_active);
                 LOG(2, "Viewfinder (Preview) image saved");
             }
             else if (still_active) {
@@ -310,7 +315,6 @@ int main(int argc, char *argv[])
         {
             if (options->verbose >= 2)
                 options->Print();
-
 			if (
 				options->previewOptions.output.empty()
 				&& options->stillOptions.output.empty()
