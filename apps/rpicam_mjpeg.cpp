@@ -89,11 +89,9 @@ static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, Strea
 {
     std::string output_filename = filename;
 
-    // Append "_preview.jpg" if multi-stream is enabled, otherwise just append ".jpg"
+    // Append "_preview.jpg" if multi-stream is enabled
     if (multiStream) {
         output_filename += "_preview.jpg";
-    } else {
-        output_filename += ".jpg";
     }
 
     jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
@@ -190,70 +188,6 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
 }
 
-// motion vector extraction function from standalone motion vector app
-void extractMotionVectors(const std::string& videoFile, const std::string& outputFile) {
-    // Construct the FFmpeg command to extract motion vectors
-    std::string ffmpegCommand = "ffmpeg -flags2 +export_mvs -i " + videoFile + 
-                                " -vf codecview=mv=pf+bf+bb " + outputFile + " -y";
-
-    // Run the FFmpeg command
-    std::cout << "Executing FFmpeg command to extract motion vectors..." << std::endl;
-    system(ffmpegCommand.c_str());
-    std::cout << "Motion vectors extracted to " << outputFile << std::endl;
-}
-
-
-// motion_vector function
-static void motion_vector(RPiCamMjpegApp &app, const std::vector<libcamera::Span<uint8_t>> &mem, const StreamInfo &info,
-					   const libcamera::ControlList &metadata, const std::string &filename,
-					   const std::string &cam_model, const MjpegOptions *options, libcamera::Size outputSize,
-					   const CompletedRequestPtr &completed_request, Stream *stream)
-{
-	VideoOptions videoOptions;
-	videoOptions.codec = "h264"; // Use H.264 codec for encoding
-	videoOptions.framerate = 15; // frames!!!!!
-	videoOptions.output = options->output; // Output file path from MjpegOptions
-
-	// Use the app instance to call initialize_encoder
-	app.initialize_encoder(videoOptions, info);
-
-	// Check if the encoder and file output were successfully initialized
-	if (!app.h264Encoder)
-	{
-		LOG_ERROR("Failed to initialize encoder.");
-		return;
-	}
-
-	if (!app.h264FileOutput)
-	{
-		LOG_ERROR("Failed to initialize file output.");
-		return;
-	}
-
-	// Get buffer to process
-	auto buffer = completed_request->buffers[stream];
-	int fd = buffer->planes()[0].fd.get(); // File descriptor of buffer
-	auto ts = metadata.get(libcamera::controls::SensorTimestamp);
-	int64_t timestamp_us = ts ? (*ts / 1000) : (buffer->metadata().timestamp / 1000);
-
-	// Ensure buffer is valid before encoding
-	if (mem.empty() || mem[0].size() == 0)
-	{
-		LOG_ERROR("Buffer is empty, cannot proceed.");
-		return;
-	}
-
-	// Encode the buffer using the H.264 encoder
-	LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
-	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
-
-
-	std::string outputFile = std::string(options->output);  // Assuming it's a C-style string
-
-	// Extract motion vectors using FFmpeg
-	extractMotionVectors(outputFile, "/tmp/motion_vectors_output.mp4");
-}
-
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -265,7 +199,6 @@ static void event_loop(RPiCamMjpegApp &app)
     videoOptions.quality = mjpegOptions->quality; // Copy MJPEG quality
     videoOptions.keypress = mjpegOptions->keypress; // Copy keypress option
     videoOptions.signal = mjpegOptions->signal; // Copy signal option
-
     // Set the codec (default to "mjpeg" if necessary)
     videoOptions.codec = "mjpeg";  // MJPEG is the codec being used
 
@@ -284,18 +217,11 @@ static void event_loop(RPiCamMjpegApp &app)
         app.ConfigureMultiStream(0); // Flags can be passed as needed
         app.StartCamera();
     }
-    else if (video_active)
+    else if (video_active || motion_active)
     {
         app.ConfigureVideo();
         app.StartCamera();
     }
-	
-	else if (motion_active)
-    {
-        app.ConfigureVideo();
-        app.StartCamera();
-    }
-
     else if (preview_active || still_active)
     {
         app.ConfigureViewfinder();
@@ -308,22 +234,14 @@ static void event_loop(RPiCamMjpegApp &app)
 
     for (;;)
     {
-        if (video_active || multi_active) {
+        // Check the elapsed time and limit to 5 seconds
+        if (video_active || multi_active || motion_active)
+        {
             auto current_time = std::chrono::steady_clock::now();
             auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
 
-            if (elapsed_time >= duration_limit_seconds) {
-                LOG(1, "5-second video recording limit reached. Stopping.");
-                app.cleanup();
-                break;
-            }
-        }
-
-		if (motion_active || multi_active) {
-            auto current_time = std::chrono::steady_clock::now();
-            auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
-
-            if (elapsed_time >= duration_limit_seconds) {
+            if (elapsed_time >= duration_limit_seconds) 
+            {
                 LOG(1, "5-second video recording limit reached. Stopping.");
                 app.cleanup();
                 break;
@@ -375,18 +293,12 @@ static void event_loop(RPiCamMjpegApp &app)
             BufferReadSync r(&app, completed_request->buffers[video_stream]);
             const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
 
-            if (video_active || multi_active) {
+            if (video_active || multi_active || motion_active) 
+            {
                 video_save(app, video_mem, video_info, completed_request->metadata, options->output,
                            app.CameraModel(), options, libcamera::Size(video_info.width, video_info.height),
                            completed_request, video_stream);
                 LOG(2, "Video recorded and saved");
-            }
-
-			if (motion_active) {
-                LOG(1, "working...");
-				motion_vector(app, video_mem, video_info, completed_request->metadata, options->output,
-                           app.CameraModel(), options, libcamera::Size(video_info.width, video_info.height),
-                           completed_request, video_stream);
             }
         }
 
@@ -417,6 +329,24 @@ int main(int argc, char *argv[])
             }
 
             event_loop(app);
+
+			if (options->stream == "motion"){
+                // run the ffmpeg command by: system([command].c_str());
+				// approach 1 : re-encode then do it
+				std::string ffmpeg_encode = "ffmpeg -i " + options->output + " -c:v libx264 -flags2 +export_mvs -preset slow -crf 0 /tmp/temp_with_mvs.mp4 -y";
+				std::string ffmpeg_extract_cmd = "ffmpeg -flags2 +export_mvs -i /tmp/temp_with_mvs.mp4 -vf codecview=mv=pf+bf+bb -c:v libx264 -crf 0 /tmp/mv.mp4 -y";
+
+				// approach 2
+				std::string ffmpeg_cmd = "ffmpeg -flags2 +export_mvs -i " + options->output + " -vf codecview=mv=pf+bf+bb output.mp4";
+
+
+				system(ffmpeg_encode.c_str());	
+				system(ffmpeg_extract_cmd.c_str());	
+
+				LOG(1, "motion vector done");
+            }
+			
+
         }
         // Call cleanup after the event loop
         app.cleanup();
