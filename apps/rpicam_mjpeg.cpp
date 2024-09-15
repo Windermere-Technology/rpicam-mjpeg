@@ -76,12 +76,27 @@ public:
 			h264Encoder.reset(); // This will call the destructor of the encoder and release its resources
 		}
 
-		if (h264FileOutput)
-		{
-			LOG(1, "Cleaning up file output...");
-			h264FileOutput.reset(); // Free the file output resources
-		}
-	}
+        if (h264FileOutput) {
+            LOG(1, "Cleaning up file output...");
+            h264FileOutput.reset();  // Free the file output resources
+        }
+    }
+
+    // FIXME: This name is terrible!
+    // TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
+    std::string GetFifoCommand()
+    {
+        static std::string fifo_path = GetOptions()->fifo;
+        static std::ifstream fifo { fifo_path };
+
+        if (fifo_path == "") return "";
+
+        std::string command;
+        std::getline(fifo, command);
+        // Reset EOF flag, so we can read in the future.
+        if (fifo.eof()) fifo.clear();
+        return command;
+    }
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
@@ -192,6 +207,15 @@ static void event_loop(RPiCamMjpegApp &app)
 {
     MjpegOptions *options = app.GetOptions();
 
+    VideoOptions videoOptions;
+    videoOptions.output = options->output; // Assuming output exists in both
+    videoOptions.quality = options->quality; // Copy MJPEG quality
+    videoOptions.keypress = options->keypress; // Copy keypress option
+    videoOptions.signal = options->signal; // Copy signal option
+    
+	// Set the codec (default to "mjpeg" if necessary)
+	videoOptions.codec = "mjpeg";  // MJPEG is the codec being used
+
     app.OpenCamera();
 
     bool preview_active = !options->previewOptions.output.empty();
@@ -217,21 +241,60 @@ static void event_loop(RPiCamMjpegApp &app)
         app.StartCamera();
     }
 
-    // If video recording is active or multi-stream, set up a 5-second limit
-    const int duration_limit_seconds = 5;
+    // If video recording is active, set up a 5-second limit
+    int duration_limit_seconds = 5;
     auto start_time = std::chrono::steady_clock::now();
 
     for (;;)
     {
-        // Check the elapsed time and limit to 5 seconds
-        if (video_active || multi_active)
-        {
+        // Check if there are any commands over the FIFO.
+        std::string fifo_command = app.GetFifoCommand();
+        if (fifo_command != "") {
+            LOG(2, "Got command from FIFO: " + fifo_command);
+
+			//split the fifo_commamd by space
+			std::string delimiter = " ";
+			size_t pos = 0;
+			std::string token;
+			std::vector<std::string> tokens; // Vector to store tokens
+
+			while ((pos = fifo_command.find(delimiter)) != std::string::npos) {
+				token = fifo_command.substr(0, pos);
+				tokens.push_back(token); 
+				fifo_command.erase(0, pos + delimiter.length());
+			}
+
+			// Add the last token
+			tokens.push_back(fifo_command);
+						
+            if (tokens[0] == "im"){
+                still_active = true; // Take a picture :)
+			} else if (tokens[0] == "ca") {
+				int length = tokens.size();
+				if (length > 2 && tokens[1] == "1") {
+					if (tokens[2] == "t") {
+						video_active = true; 
+						duration_limit_seconds = std::stoi(tokens[3]);
+					}
+				} else if (tokens[1] == "1") {
+					video_active = true; 
+				} else {
+					;
+				}
+			} else {
+				;
+			}
+        }
+
+        // If video is active, check the elapsed time and limit to 5 seconds
+        if (video_active) {
             auto current_time = std::chrono::steady_clock::now();
             auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
 
-            if (elapsed_time >= duration_limit_seconds) 
-            {
-                LOG(1, "5-second video recording limit reached. Stopping.");
+            if (elapsed_time >= duration_limit_seconds) {				
+				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
+                
+                // Clean up encoder and file output
                 app.cleanup();
                 break;
             }

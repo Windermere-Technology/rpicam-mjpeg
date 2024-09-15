@@ -175,6 +175,22 @@ struct Options
 	std::string hdr;
 	TimeVal<std::chrono::microseconds> flicker_period;
 	bool no_raw;
+	int quality;
+	std::vector<std::string> exif;
+	TimeVal<std::chrono::milliseconds> timelapse;
+	uint32_t framestart;
+	bool datetime;
+	bool timestamp;
+	unsigned int restart;
+	bool keypress;
+	bool signal;
+	std::string thumb;
+	unsigned int thumb_width, thumb_height, thumb_quality;
+	std::string encoding;
+	bool raw;
+	std::string latest;
+	bool immediate;
+	bool zsl;
 
 	virtual bool Parse(int argc, char *argv[]);
 	virtual void Print() const;

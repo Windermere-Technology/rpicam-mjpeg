@@ -38,6 +38,8 @@ struct MjpegOptions : public Options
 				"Set the output still width (0 = use default value)")
 			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
 				"Set the output still height (0 = use default value)")
+			("stream", value<std::string>(&stream), "Select the output stream type (preview, still or video)")
+			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
 			;
 		// clang-format on
 	}
@@ -70,6 +72,8 @@ struct MjpegOptions : public Options
 		videoOptions.SetApp(app);
 		Options::SetApp(app);
 	}
+	std::string stream;
+	std::string fifo;
 
 	virtual void Print() const override
 	{
@@ -77,6 +81,27 @@ struct MjpegOptions : public Options
 		stillOptions.Print();
 		previewOptions.Print();
 		videoOptions.Print();
+		std::cerr << "    encoding: " << encoding << std::endl;
+		std::cerr << "    quality: " << quality << std::endl;
+		std::cerr << "    raw: " << raw << std::endl;
+		std::cerr << "    restart: " << restart << std::endl;
+		std::cerr << "    timelapse: " << timelapse.get() << "ms" << std::endl;
+		std::cerr << "    framestart: " << framestart << std::endl;
+		std::cerr << "    datetime: " << datetime << std::endl;
+		std::cerr << "    timestamp: " << timestamp << std::endl;
+		std::cerr << "    keypress: " << keypress << std::endl;
+		std::cerr << "    signal: " << signal << std::endl;
+		std::cerr << "    thumbnail width: " << thumb_width << std::endl;
+		std::cerr << "    thumbnail height: " << thumb_height << std::endl;
+		std::cerr << "    thumbnail quality: " << thumb_quality << std::endl;
+		std::cerr << "    latest: " << latest << std::endl;
+		std::cerr << "    immediate " << immediate << std::endl;
+		std::cerr << "    AF on capture: " << af_on_capture << std::endl;
+		std::cerr << "    Zero shutter lag: " << zsl << std::endl;
+		std::cerr << "    Stream: " << stream << std::endl;
+		std::cerr << "    FIFO: " << fifo << std::endl;
+		for (auto &s : exif)
+			std::cerr << "    EXIF: " << s << std::endl;
 	}
 
 	StillOptions stillOptions{};
