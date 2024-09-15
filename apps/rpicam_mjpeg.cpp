@@ -331,19 +331,14 @@ int main(int argc, char *argv[])
             event_loop(app);
 
 			if (options->stream == "motion"){
-                // run the ffmpeg command by: system([command].c_str());
-				// approach 1 : re-encode then do it
-				std::string ffmpeg_encode = "ffmpeg -i " + options->output + " -c:v libx264 -flags2 +export_mvs -preset slow -crf 0 /tmp/temp_with_mvs.mp4 -y";
+				// re-encode the video for mv exportation, then do the extraction
+				std::string ffmpeg_encode = "ffmpeg -i " + options->output + " -c:v libx264 -flags2 +export_mvs -preset fast -crf 24 /tmp/temp_with_mvs.mp4 -y";
 				std::string ffmpeg_extract_cmd = "ffmpeg -flags2 +export_mvs -i /tmp/temp_with_mvs.mp4 -vf codecview=mv=pf+bf+bb -c:v libx264 -crf 0 /tmp/mv.mp4 -y";
-
-				// approach 2
-				std::string ffmpeg_cmd = "ffmpeg -flags2 +export_mvs -i " + options->output + " -vf codecview=mv=pf+bf+bb output.mp4";
-
 
 				system(ffmpeg_encode.c_str());	
 				system(ffmpeg_extract_cmd.c_str());	
 
-				LOG(1, "motion vector done");
+				LOG(1, "motion vector saved to /tmp/mv.mp4");
             }
 			
 
