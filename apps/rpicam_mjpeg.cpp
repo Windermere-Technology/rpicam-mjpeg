@@ -8,6 +8,7 @@
 */
 #include <cassert>
 #include <chrono>
+#include <cstdio>
 #include <ctime>
 #include <iomanip>
 #include <string>
@@ -340,17 +341,19 @@ int main(int argc, char *argv[])
 
 			if (options->stream == "motion")
 			{
-				// re-encode the video for mv exportation, then do the extraction
+				// re-encode the video for mv exportation
 				std::string ffmpeg_encode =
 					"ffmpeg -i " + options->output +
 					" -c:v libx264 -flags2 +export_mvs -preset fast -crf 24 /tmp/temp_with_mvs.mp4 -y";
+				// overlay the motion vectors on top
 				std::string ffmpeg_extract_cmd =
 					"ffmpeg -flags2 +export_mvs -i /tmp/temp_with_mvs.mp4 -vf codecview=mv=pf+bf+bb -c:v libx264 -crf 0 /tmp/mv.mp4 -y";
 
 				system(ffmpeg_encode.c_str());
 				system(ffmpeg_extract_cmd.c_str());
 
-				LOG(1, "motion vector saved to /tmp/mv.mp4");
+				remove("/tmp/temp_with_mvs.mp4"); // remove tmp files
+				LOG(2, "motion vector saved to /tmp/mv.mp4");
 			}
 		}
 		// Call cleanup after the event loop
