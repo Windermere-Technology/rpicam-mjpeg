@@ -319,7 +319,12 @@ bool Options::Parse(int argc, char *argv[])
 	using namespace libcamera;
 	variables_map vm;
 	// Read options from the command line
-	store(parse_command_line(argc, argv, options_), vm);
+	// - Ignore unknown options, because MjpegOptions creates several Options objects...
+	// FIXME: Is there a way to do that without (technically) breaking the other apps?
+	store(
+		command_line_parser(argc, argv).options(options_).allow_unregistered().run(),
+		vm
+	);
 	notify(vm);
 	// Read options from a file if specified
 	std::ifstream ifs(config_file.c_str());
