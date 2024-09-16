@@ -88,6 +88,57 @@ rpicam-mjpeg --stream multi --output /tmp/vid.mp4
 
 ---
 
+FIFO
+-----
+
+Currently, FIFO can take 3 different commands:
+
+Firstly, create FIFO by:
+```bash
+mkfifo /tmp/FIFO
+```
+
+### 1: Still Image Capture
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'im' > /tmp/FIFO
+```
+
+### 2: Video Recording
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --stream video --output /tmp/vid.mp4 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'ca 1 10' > /tmp/FIFO
+```
+To record video for 10 seconds;
+Or
+```bash
+echo 'ca 0' > /tmp/FIFO
+```
+To stop recording. (TBD)
+
+### 3: Preview
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --stream preview --output test.mp4 --fifo /tmp/FIFO
+```
+On terminal b:
+```bash
+cho 'pv 1000 500' > /tmp/FIFO
+```
+To set the size of preview window as 1000 x 500.
+
+---
+
 Clean and Rebuild
 ---------------------
 

@@ -207,15 +207,6 @@ static void event_loop(RPiCamMjpegApp &app)
 {
     MjpegOptions *options = app.GetOptions();
 
-    VideoOptions videoOptions;
-    videoOptions.output = options->output; // Assuming output exists in both
-    videoOptions.quality = options->quality; // Copy MJPEG quality
-    videoOptions.keypress = options->keypress; // Copy keypress option
-    videoOptions.signal = options->signal; // Copy signal option
-    
-	// Set the codec (default to "mjpeg" if necessary)
-	videoOptions.codec = "mjpeg";  // MJPEG is the codec being used
-
     app.OpenCamera();
 
     bool preview_active = !options->previewOptions.output.empty();
@@ -267,22 +258,27 @@ static void event_loop(RPiCamMjpegApp &app)
 			// Add the last token
 			tokens.push_back(fifo_command);
 						
-            if (tokens[0] == "im"){
+            if (tokens[0] == "im") {
                 still_active = true; // Take a picture :)
 			} else if (tokens[0] == "ca") {
-				int length = tokens.size();
-				if (length > 2 && tokens[1] == "1") {
-					if (tokens[2] == "t") {
-						video_active = true; 
-						duration_limit_seconds = std::stoi(tokens[3]);
-					}
-				} else if (tokens[1] == "1") {
-					video_active = true; 
+				if (tokens.size() < 2 || tokens[1] != "1") { // ca 0, or some invalid command.
+					still_active = false; //TODO: may need to break the current recording
 				} else {
-					;
+					//print get in true
+					still_active = true;
+					if (tokens.size() >= 3) duration_limit_seconds = stoi(tokens[2]);
+				} 
+			} else if (tokens[0] == "pv") { 
+				//OG: pv QQ WWW DD - set preview Quality, Width and Divider
+				//p05: pv Hight Width, may need to be consistent with OG
+				if (tokens.size() < 3) {
+					std::cout << "Invalid command" << std::endl;
+				} else {
+					std::cout << "Preview command: " << tokens[1] << " " << tokens[2] << std::endl; //delete
+					preview_active = true;
+					options->previewOptions.width = stoi(tokens[1]);
+					options->previewOptions.height = stoi(tokens[2]);
 				}
-			} else {
-				;
 			}
         }
 
@@ -333,7 +329,7 @@ static void event_loop(RPiCamMjpegApp &app)
                 // Save preview if not in still mode
 				StillOptions const opts = options->previewOptions;
 				// If opts.width == 0, we should use "the default"
-				auto width = opts.width ? opts.width : viewfinder_info.width;
+				auto width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
 				auto height = opts.height ? opts.height : viewfinder_info.height;
                 preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata,
                              opts.output, app.CameraModel(), &opts,
