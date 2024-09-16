@@ -76,41 +76,47 @@ public:
 			h264Encoder.reset(); // This will call the destructor of the encoder and release its resources
 		}
 
-        if (h264FileOutput) {
-            LOG(1, "Cleaning up file output...");
-            h264FileOutput.reset();  // Free the file output resources
-        }
-    }
+		if (h264FileOutput)
+		{
+			LOG(1, "Cleaning up file output...");
+			h264FileOutput.reset(); // Free the file output resources
+		}
+	}
 
-    // FIXME: This name is terrible!
-    // TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
-    std::string GetFifoCommand()
-    {
-        static std::string fifo_path = GetOptions()->fifo;
-        static std::ifstream fifo { fifo_path };
+	// FIXME: This name is terrible!
+	// TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
+	std::string GetFifoCommand()
+	{
+		static std::string fifo_path = GetOptions()->fifo;
+		static std::ifstream fifo { fifo_path };
 
-        if (fifo_path == "") return "";
+		if (fifo_path == "")
+			return "";
 
-        std::string command;
-        std::getline(fifo, command);
-        // Reset EOF flag, so we can read in the future.
-        if (fifo.eof()) fifo.clear();
-        return command;
-    }
+		std::string command;
+		std::getline(fifo, command);
+		// Reset EOF flag, so we can read in the future.
+		if (fifo.eof())
+			fifo.clear();
+		return command;
+	}
 };
 
-static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info, libcamera::ControlList const &metadata,
-                         std::string const &filename, std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize, bool multiStream)
+static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
+						 libcamera::ControlList const &metadata, std::string const &filename,
+						 std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize,
+						 bool multiStream)
 {
-    std::string output_filename = filename;
+	std::string output_filename = filename;
 
-    // Append "_preview.jpg" if multi-stream is enabled
-    if (multiStream) {
-        output_filename += "_preview.jpg";
-    }
+	// Append "_preview.jpg" if multi-stream is enabled
+	if (multiStream)
+	{
+		output_filename += "_preview.jpg";
+	}
 
-    jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
-    LOG(1, "Saved preview image: " + output_filename);
+	jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
+	LOG(1, "Saved preview image: " + output_filename);
 }
 
 static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -205,43 +211,44 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
-    MjpegOptions *options = app.GetOptions();
+	MjpegOptions *options = app.GetOptions();
 
-    app.OpenCamera();
+	app.OpenCamera();
 
-    bool preview_active = !options->previewOptions.output.empty();
-    bool still_active = !options->stillOptions.output.empty();
-    bool video_active = !options->videoOptions.output.empty();
+	bool preview_active = !options->previewOptions.output.empty();
+	bool still_active = !options->stillOptions.output.empty();
+	bool video_active = !options->videoOptions.output.empty();
 	// TODO: Remove this variable altogether... eventually
-    bool multi_active = ((int)preview_active + (int)still_active + (int)video_active) > 1;
+	bool multi_active = ((int)preview_active + (int)still_active + (int)video_active) > 1;
 
-    if (multi_active)
-    {
-        // Call the multi-stream configuration function
-        app.ConfigureMultiStream(0); // Flags can be passed as needed
-        app.StartCamera();
-    }
-    else if (video_active)
-    {
-        app.ConfigureVideo();
-        app.StartCamera();
-    }
-    else if (preview_active || still_active)
-    {
-        app.ConfigureViewfinder();
-        app.StartCamera();
-    }
+	if (multi_active)
+	{
+		// Call the multi-stream configuration function
+		app.ConfigureMultiStream(0); // Flags can be passed as needed
+		app.StartCamera();
+	}
+	else if (video_active)
+	{
+		app.ConfigureVideo();
+		app.StartCamera();
+	}
+	else if (preview_active || still_active)
+	{
+		app.ConfigureViewfinder();
+		app.StartCamera();
+	}
 
-    // If video recording is active, set up a 5-second limit
-    int duration_limit_seconds = 5;
-    auto start_time = std::chrono::steady_clock::now();
+	// If video recording is active, set up a 5-second limit
+	int duration_limit_seconds = 5;
+	auto start_time = std::chrono::steady_clock::now();
 
-    for (;;)
-    {
-        // Check if there are any commands over the FIFO.
-        std::string fifo_command = app.GetFifoCommand();
-        if (fifo_command != "") {
-            LOG(2, "Got command from FIFO: " + fifo_command);
+	for (;;)
+	{
+		// Check if there are any commands over the FIFO.
+		std::string fifo_command = app.GetFifoCommand();
+		if (fifo_command != "")
+		{
+			LOG(2, "Got command from FIFO: " + fifo_command);
 
 			//split the fifo_commamd by space
 			std::string delimiter = " ";
@@ -249,147 +256,164 @@ static void event_loop(RPiCamMjpegApp &app)
 			std::string token;
 			std::vector<std::string> tokens; // Vector to store tokens
 
-			while ((pos = fifo_command.find(delimiter)) != std::string::npos) {
+			while ((pos = fifo_command.find(delimiter)) != std::string::npos)
+			{
 				token = fifo_command.substr(0, pos);
-				tokens.push_back(token); 
+				tokens.push_back(token);
 				fifo_command.erase(0, pos + delimiter.length());
 			}
 
 			// Add the last token
 			tokens.push_back(fifo_command);
-						
-            if (tokens[0] == "im") {
-                still_active = true; // Take a picture :)
-			} else if (tokens[0] == "ca") {
-				if (tokens.size() < 2 || tokens[1] != "1") { // ca 0, or some invalid command.
+
+			if (tokens[0] == "im")
+			{
+				still_active = true; // Take a picture :)
+			}
+			else if (tokens[0] == "ca")
+			{
+				if (tokens.size() < 2 || tokens[1] != "1")
+				{ // ca 0, or some invalid command.
 					still_active = false; //TODO: may need to break the current recording
-				} else {
+				}
+				else
+				{
 					//print get in true
 					still_active = true;
-					if (tokens.size() >= 3) duration_limit_seconds = stoi(tokens[2]);
-				} 
-			} else if (tokens[0] == "pv") { 
+					if (tokens.size() >= 3)
+						duration_limit_seconds = stoi(tokens[2]);
+				}
+			}
+			else if (tokens[0] == "pv")
+			{
 				//OG: pv QQ WWW DD - set preview Quality, Width and Divider
 				//p05: pv Hight Width, may need to be consistent with OG
-				if (tokens.size() < 3) {
+				if (tokens.size() < 3)
+				{
 					std::cout << "Invalid command" << std::endl;
-				} else {
+				}
+				else
+				{
 					std::cout << "Preview command: " << tokens[1] << " " << tokens[2] << std::endl; //delete
 					preview_active = true;
 					options->previewOptions.width = stoi(tokens[1]);
 					options->previewOptions.height = stoi(tokens[2]);
 				}
 			}
-        }
+		}
 
-        // If video is active, check the elapsed time and limit to 5 seconds
-        if (video_active) {
-            auto current_time = std::chrono::steady_clock::now();
-            auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+		// If video is active, check the elapsed time and limit to 5 seconds
+		if (video_active)
+		{
+			auto current_time = std::chrono::steady_clock::now();
+			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
 
-            if (elapsed_time >= duration_limit_seconds) {				
+			if (elapsed_time >= duration_limit_seconds)
+			{
 				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
-                
-                // Clean up encoder and file output
-                app.cleanup();
-                break;
-            }
-        }
 
-        RPiCamApp::Msg msg = app.Wait();
-        if (msg.type == RPiCamApp::MsgType::Timeout)
-        {
-            LOG_ERROR("ERROR: Device timeout detected, attempting a restart!!!");
-            app.StopCamera();
-            app.StartCamera();
-            continue;
-        }
-        if (msg.type == RPiCamApp::MsgType::Quit)
-            return;
-        else if (msg.type != RPiCamApp::MsgType::RequestComplete)
-            throw std::runtime_error("unrecognised message!");
+				// Clean up encoder and file output
+				app.cleanup();
+				break;
+			}
+		}
 
-        CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
+		RPiCamApp::Msg msg = app.Wait();
+		if (msg.type == RPiCamApp::MsgType::Timeout)
+		{
+			LOG_ERROR("ERROR: Device timeout detected, attempting a restart!!!");
+			app.StopCamera();
+			app.StartCamera();
+			continue;
+		}
+		if (msg.type == RPiCamApp::MsgType::Quit)
+			return;
+		else if (msg.type != RPiCamApp::MsgType::RequestComplete)
+			throw std::runtime_error("unrecognised message!");
 
-        // Process the Viewfinder (Preview) stream
-        if (app.ViewfinderStream())
-        {
-            Stream *viewfinder_stream = app.ViewfinderStream();
-            StreamInfo viewfinder_info = app.GetStreamInfo(viewfinder_stream);
-            BufferReadSync r(&app, completed_request->buffers[viewfinder_stream]);
-            const std::vector<libcamera::Span<uint8_t>> viewfinder_mem = r.Get();
+		CompletedRequestPtr &completed_request = std::get<CompletedRequestPtr>(msg.payload);
 
-            if (still_active) {
-                // Save still image instead of preview when still_active is set
-                still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
-                           app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
-                LOG(2, "Still image saved");
-            }
-            else if (preview_active || multi_active) {
-                // Save preview if not in still mode
+		// Process the Viewfinder (Preview) stream
+		if (app.ViewfinderStream())
+		{
+			Stream *viewfinder_stream = app.ViewfinderStream();
+			StreamInfo viewfinder_info = app.GetStreamInfo(viewfinder_stream);
+			BufferReadSync r(&app, completed_request->buffers[viewfinder_stream]);
+			const std::vector<libcamera::Span<uint8_t>> viewfinder_mem = r.Get();
+
+			if (still_active)
+			{
+				// Save still image instead of preview when still_active is set
+				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
+						   app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
+				LOG(2, "Still image saved");
+			}
+			else if (preview_active || multi_active)
+			{
+				// Save preview if not in still mode
 				StillOptions const opts = options->previewOptions;
 				// If opts.width == 0, we should use "the default"
 				auto width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
 				auto height = opts.height ? opts.height : viewfinder_info.height;
-                preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata,
-                             opts.output, app.CameraModel(), &opts,
-							 libcamera::Size(width, height), multi_active);
-                LOG(2, "Viewfinder (Preview) image saved");
-            }
-            else if (still_active) {
-                still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
-                            app.CameraModel(), &options->stillOptions, libcamera::Size(viewfinder_info.width, viewfinder_info.height));
-                LOG(2, "Still image saved");
-            }
-        }
+				preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, opts.output,
+							 app.CameraModel(), &opts, libcamera::Size(width, height), multi_active);
+				LOG(2, "Viewfinder (Preview) image saved");
+			}
+			else if (still_active)
+			{
+				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
+						   app.CameraModel(), &options->stillOptions,
+						   libcamera::Size(viewfinder_info.width, viewfinder_info.height));
+				LOG(2, "Still image saved");
+			}
+		}
 
-        // Process the VideoRecording stream
-        if (app.VideoStream())
-        {
-            Stream *video_stream = app.VideoStream();
-            StreamInfo video_info = app.GetStreamInfo(video_stream);
-            BufferReadSync r(&app, completed_request->buffers[video_stream]);
-            const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
+		// Process the VideoRecording stream
+		if (app.VideoStream())
+		{
+			Stream *video_stream = app.VideoStream();
+			StreamInfo video_info = app.GetStreamInfo(video_stream);
+			BufferReadSync r(&app, completed_request->buffers[video_stream]);
+			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
 
-            if (video_active || multi_active) {
-                video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
-                           app.CameraModel(), options->videoOptions, libcamera::Size(video_info.width, video_info.height),
-                           completed_request, video_stream);
-                LOG(2, "Video recorded and saved");
-            }
-        }
+			if (video_active || multi_active)
+			{
+				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
+						   app.CameraModel(), options->videoOptions,
+						   libcamera::Size(video_info.width, video_info.height), completed_request, video_stream);
+				LOG(2, "Video recorded and saved");
+			}
+		}
 
-        LOG(2, "Request processing completed");
-    }
+		LOG(2, "Request processing completed");
+	}
 }
 
 int main(int argc, char *argv[])
 {
-    try
-    {
-        RPiCamMjpegApp app;
-        MjpegOptions *options = app.GetOptions();
+	try
+	{
+		RPiCamMjpegApp app;
+		MjpegOptions *options = app.GetOptions();
 
-        if (options->Parse(argc, argv))
-        {
-            if (options->verbose >= 2)
-                options->Print();
-			if (
-				options->previewOptions.output.empty()
-				&& options->stillOptions.output.empty()
-				&& options->videoOptions.output.empty()
-			)
-				throw std::runtime_error("At least one of --preview-output, --still-output or --video-output should be provided.");
+		if (options->Parse(argc, argv))
+		{
+			if (options->verbose >= 2)
+				options->Print();
+			if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
+				options->videoOptions.output.empty())
+				throw std::runtime_error(
+					"At least one of --preview-output, --still-output or --video-output should be provided.");
 
-            event_loop(app);
-        }
-        // Call cleanup after the event loop
-        app.cleanup();
-    }
-    catch (std::exception const &e)
-    {
-        LOG_ERROR("ERROR: *** " << e.what() << " ***");
-        return -1;
-    }
-    return 0;
+			event_loop(app);
+		}
+		// Call cleanup after the event loop
+		app.cleanup();
+	}
+	catch (std::exception const &e)
+	{
+		LOG_ERROR("ERROR: *** " << e.what() << " ***");
+		return -1;
+	}
+	return 0;
 }
