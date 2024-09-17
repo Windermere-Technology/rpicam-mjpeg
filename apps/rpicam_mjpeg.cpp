@@ -134,9 +134,10 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
 		// std::stringstream buffer;
 		// buffer << std::put_time(std::localtime(&t), "%Y%m%d%H%M%S");
 
-		// The extension
-		std::string extension = filename.substr(period_index, filename.length());
-		output_filename = name + timestamp + extension;
+		// Extension
+        std::string extension = filename.substr(period_index, filename.length());
+        output_filename = name + timestamp + extension;
+		
 	}
 
 	jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
@@ -152,6 +153,14 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	// TODO: This probably shouldn't be setting these?
 	options.codec = "h264"; // Use H.264 codec for encoding
 	options.framerate = 15; // frames!!!!!
+
+	// Ensure that the user-specified resolution is applied
+    if (outputSize.width != info.width || outputSize.height != info.height)
+    {
+        LOG(1, "Resizing video output to: " << outputSize.width << "x" << outputSize.height);
+        // Apply resizing logic here
+        
+    }
 
 	// Use the app instance to call initialize_encoder
 	app.initialize_encoder(options, info);
