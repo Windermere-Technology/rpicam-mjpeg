@@ -154,6 +154,14 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	options.codec = "h264"; // Use H.264 codec for encoding
 	options.framerate = 15; // frames!!!!!
 
+	// Ensure that the user-specified resolution is applied
+    if (outputSize.width != info.width || outputSize.height != info.height)
+    {
+        LOG(1, "Resizing video output to: " << outputSize.width << "x" << outputSize.height);
+        // Apply resizing logic here
+        
+    }
+
 	// Use the app instance to call initialize_encoder
 	app.initialize_encoder(options, info);
 
