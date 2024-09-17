@@ -134,9 +134,10 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
 		// std::stringstream buffer;
 		// buffer << std::put_time(std::localtime(&t), "%Y%m%d%H%M%S");
 
-		// The extension
-		std::string extension = filename.substr(period_index, filename.length());
-		output_filename = name + timestamp + extension;
+		// Force the correct extension for still images (".jpg")
+        std::string extension = ".jpg";  // Always save still images as .jpg
+        output_filename = name + timestamp + extension;
+		
 	}
 
 	jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
