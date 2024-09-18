@@ -101,7 +101,7 @@ mkfifo /tmp/FIFO
 ### 1: Still Image Capture
 On terminal a:
 ```bash
-./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg --fifo /tmp/FIFO
+./build/apps/rpicam-mjpeg --still-output /tmp/cam.jpg --fifo /tmp/FIFO
 ```
 
 On terminal b:
@@ -112,7 +112,7 @@ echo 'im' > /tmp/FIFO
 ### 2: Video Recording
 On terminal a:
 ```bash
-./build/apps/rpicam-mjpeg --stream video --output /tmp/vid.mp4 --fifo /tmp/FIFO
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO --nopreview
 ```
 
 On terminal b:
@@ -129,8 +129,9 @@ To stop recording. (TBD)
 ### 3: Preview
 On terminal a:
 ```bash
-./build/apps/rpicam-mjpeg --stream preview --output test.mp4 --fifo /tmp/FIFO
+./build/apps/rpicam-mjpeg --preview-output /tmp/cam.jpg --fifo /tmp/FIFO --nopreview
 ```
+
 On terminal b:
 ```bash
 cho 'pv 1000 500' > /tmp/FIFO

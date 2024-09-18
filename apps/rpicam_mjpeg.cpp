@@ -294,7 +294,6 @@ static void event_loop(RPiCamMjpegApp &app)
 				}
 				else
 				{
-					std::cout << "Preview command: " << tokens[1] << " " << tokens[2] << std::endl; //delete
 					preview_active = true;
 					options->previewOptions.width = stoi(tokens[1]);
 					options->previewOptions.height = stoi(tokens[2]);

@@ -38,7 +38,6 @@ struct MjpegOptions : public Options
 				"Set the output still width (0 = use default value)")
 			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
 				"Set the output still height (0 = use default value)")
-			("stream", value<std::string>(&stream), "Select the output stream type (preview, still or video)")
 			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
 			;
 		// clang-format on
@@ -72,7 +71,6 @@ struct MjpegOptions : public Options
 		videoOptions.SetApp(app);
 		Options::SetApp(app);
 	}
-	std::string stream;
 	std::string fifo;
 
 	virtual void Print() const override
