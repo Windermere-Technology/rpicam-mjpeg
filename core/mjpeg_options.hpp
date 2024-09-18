@@ -58,7 +58,19 @@ struct MjpegOptions : public Options
 		if (Options::Parse(argc, argv) == false)
 			return false;
 
+		// Check if --output is used and throw an error if it's provided
+		if (!output.empty())
+		{
+			throw std::runtime_error("The --output option is deprecated. Use --video-output, --preview-output, or --still-output instead.");
+		}
+
+		// Ensure at least one of --still-output, --video-output, or --preview-output is specified
+		if (stillOptions.output.empty() && previewOptions.output.empty() && videoOptions.output.empty())
+		{
+			throw std::runtime_error("At least one of --still-output, --video-output, or --preview-output should be provided.");
+		}
 		output = "/dev/null";
+
 
 		return true;
 	}
