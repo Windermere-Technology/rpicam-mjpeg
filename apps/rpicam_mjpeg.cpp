@@ -248,6 +248,8 @@ static void event_loop(RPiCamMjpegApp &app)
 		std::string fifo_command = app.GetFifoCommand();
 		if (fifo_command != "")
 		{
+			
+
 			LOG(2, "Got command from FIFO: " + fifo_command);
 
 			//split the fifo_commamd by space
@@ -274,12 +276,12 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				if (tokens.size() < 2 || tokens[1] != "1")
 				{ // ca 0, or some invalid command.
-					still_active = false; //TODO: may need to break the current recording
+					video_active = false; //TODO: may need to break the current recording
 				}
 				else
 				{
 					//print get in true
-					still_active = true;
+					video_active = true;
 					if (tokens.size() >= 3)
 						duration_limit_seconds = stoi(tokens[2]);
 				}
@@ -310,11 +312,12 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (elapsed_time >= duration_limit_seconds)
 			{
 				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
-
-				// Clean up encoder and file output
 				app.cleanup();
-				break;
+				video_active = false;
 			}
+
+			if (!multi_active) break; 
+
 		}
 
 		RPiCamApp::Msg msg = app.Wait();
@@ -343,8 +346,10 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (still_active)
 			{
 				// Save still image instead of preview when still_active is set
-				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
-						   app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
+				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
+						   app.CameraModel(), &options->stillOptions,
+						   libcamera::Size(viewfinder_info.width, 
+						   					viewfinder_info.height));
 				LOG(2, "Still image saved");
 			}
 			else if (preview_active || multi_active)
@@ -358,13 +363,6 @@ static void event_loop(RPiCamMjpegApp &app)
 							 app.CameraModel(), &opts, libcamera::Size(width, height), multi_active);
 				LOG(2, "Viewfinder (Preview) image saved");
 			}
-			else if (still_active)
-			{
-				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
-						   app.CameraModel(), &options->stillOptions,
-						   libcamera::Size(viewfinder_info.width, viewfinder_info.height));
-				LOG(2, "Still image saved");
-			}
 		}
 
 		// Process the VideoRecording stream
@@ -375,7 +373,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
 			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
 
-			if (video_active || multi_active)
+			if (video_active)
 			{
 				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
 						   app.CameraModel(), options->videoOptions,
