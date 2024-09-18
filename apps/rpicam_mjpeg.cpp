@@ -123,15 +123,6 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
 					   libcamera::ControlList const &metadata, std::string const &filename,
 					   std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize)
 {
-	// Save a still every 3 seconds.
-	static std::time_t last_run_at = 0;
-	const std::time_t seconds_per_frame = 3;
-	std::time_t now = std::time(nullptr);
-
-	if (now - last_run_at < seconds_per_frame)
-		return;
-	last_run_at = now;
-
 	// Add the datetime to the filename.
 	std::string output_filename;
 	{
@@ -142,6 +133,7 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
 		std::string name = filename.substr(0, period_index);
 
 		// The date/timestamp
+		std::time_t now = std::time(nullptr);
 		struct tm *tm = localtime(&now);
 		size_t time_buff_size = 4 + 2 + 2 + 2 + 2 + 2 + 1; // strftime(NULL, 0, "%Y%m%d%H%M%S", tm);
 		char *time_buff = (char *)calloc(time_buff_size, sizeof(*time_buff));
@@ -267,14 +259,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			// Add the last token
 			tokens.push_back(fifo_command);
 
-			if (tokens[0] == "im")
-			{
-				still_active = true; // Take a picture :)
-				if (tokens.size() >= 2 && tokens[1] == "stop")
-				{
-					still_active = false;
-				}
-			}
+			if (tokens[0] == "im") still_active = true; // Take a picture :)
 			else if (tokens[0] == "ca")
 			{
 				if (tokens.size() < 2 || tokens[1] != "1")
@@ -351,7 +336,9 @@ static void event_loop(RPiCamMjpegApp &app)
 				// Save still image instead of preview when still_active is set
 				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
 						   app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
+				
 				LOG(2, "Still image saved");
+				still_active = false;
 			}
 			else if (preview_active || multi_active)
 			{

@@ -65,8 +65,7 @@ At this stage, the subcommands are not configured to run concurrently:
 ```bash
 ./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg
 ```
-* `./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg` will save a timestamped JPEG every 3 seconds.
-  - Terminate with Ctrl+C.
+* `./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg` will save a timestamped JPEG.
   - Output files are saved in the `/tmp` directory.
     
 ### 3. Video Stream
@@ -108,12 +107,9 @@ On terminal b:
 ```bash
 echo 'im' > /tmp/FIFO
 ```
-This command switches the program into _image cpature_ mode, it will capture still images
-every 3 seconds.
-If you want to switch this off, run
-```bash
-echo 'im stop' > /tmp/FIFO
-```
+Run this command to take a still picture :wink:
+
+
 
 ### 2: Video Recording
 On terminal a:
