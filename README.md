@@ -108,6 +108,12 @@ On terminal b:
 ```bash
 echo 'im' > /tmp/FIFO
 ```
+This command switches the program into _image cpature_ mode, it will capture still images
+every 3 seconds.
+If you want to switch this off, run
+```bash
+echo 'im stop' > /tmp/FIFO
+```
 
 ### 2: Video Recording
 On terminal a:

@@ -283,7 +283,6 @@ static void event_loop(RPiCamMjpegApp &app)
 				}
 				else
 				{
-					//print get in true
 					video_active = true;
 					start_time = std::chrono::steady_clock::now();
 					if (tokens.size() >= 3)
@@ -310,8 +309,6 @@ static void event_loop(RPiCamMjpegApp &app)
 		// If video is active, check the elapsed time and limit to 5 seconds
 		if (video_active)
 		{
-			//print hey
-			std::cout << "hey" << std::endl;
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
 
