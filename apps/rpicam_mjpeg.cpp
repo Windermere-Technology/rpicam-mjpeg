@@ -249,7 +249,6 @@ static void event_loop(RPiCamMjpegApp &app)
 		if (fifo_command != "")
 		{
 			
-
 			LOG(2, "Got command from FIFO: " + fifo_command);
 
 			//split the fifo_commamd by space
@@ -286,6 +285,7 @@ static void event_loop(RPiCamMjpegApp &app)
 				{
 					//print get in true
 					video_active = true;
+					start_time = std::chrono::steady_clock::now();
 					if (tokens.size() >= 3)
 						duration_limit_seconds = stoi(tokens[2]);
 				}
@@ -310,6 +310,8 @@ static void event_loop(RPiCamMjpegApp &app)
 		// If video is active, check the elapsed time and limit to 5 seconds
 		if (video_active)
 		{
+			//print hey
+			std::cout << "hey" << std::endl;
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
 
@@ -347,16 +349,6 @@ static void event_loop(RPiCamMjpegApp &app)
 			BufferReadSync r(&app, completed_request->buffers[viewfinder_stream]);
 			const std::vector<libcamera::Span<uint8_t>> viewfinder_mem = r.Get();
 
-			// if (still_active)
-			// {
-			// 	// Save still image instead of preview when still_active is set
-			// 	still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
-			// 			   app.CameraModel(), &options->stillOptions,
-			// 			   libcamera::Size(viewfinder_info.width, 
-			// 			   					viewfinder_info.height));
-			// 	LOG(2, "Still image saved");
-			// 	still_active = false;
-			// }
 			if (still_active)
 			{
 				// Save still image instead of preview when still_active is set
