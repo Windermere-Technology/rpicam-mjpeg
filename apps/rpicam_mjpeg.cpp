@@ -271,6 +271,10 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (tokens[0] == "im")
 			{
 				still_active = true; // Take a picture :)
+				if (tokens.size() >= 2 && tokens[1] == "stop")
+				{
+					still_active = false;
+				}
 			}
 			else if (tokens[0] == "ca")
 			{
@@ -343,13 +347,21 @@ static void event_loop(RPiCamMjpegApp &app)
 			BufferReadSync r(&app, completed_request->buffers[viewfinder_stream]);
 			const std::vector<libcamera::Span<uint8_t>> viewfinder_mem = r.Get();
 
+			// if (still_active)
+			// {
+			// 	// Save still image instead of preview when still_active is set
+			// 	still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
+			// 			   app.CameraModel(), &options->stillOptions,
+			// 			   libcamera::Size(viewfinder_info.width, 
+			// 			   					viewfinder_info.height));
+			// 	LOG(2, "Still image saved");
+			// 	still_active = false;
+			// }
 			if (still_active)
 			{
 				// Save still image instead of preview when still_active is set
-				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->output,
-						   app.CameraModel(), &options->stillOptions,
-						   libcamera::Size(viewfinder_info.width, 
-						   					viewfinder_info.height));
+				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
+						   app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
 				LOG(2, "Still image saved");
 			}
 			else if (preview_active || multi_active)
