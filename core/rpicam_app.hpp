@@ -35,10 +35,11 @@
 #include "core/dma_heaps.hpp"
 #include "core/post_processor.hpp"
 #include "core/stream_info.hpp"
-#include "core/still_options.hpp"
-#include "core/video_options.hpp"
 
 struct Options;
+struct StillOptions;
+struct VideoOptions;
+
 class Preview;
 struct Mode;
 
@@ -140,9 +141,9 @@ public:
 	void ConfigureStill(unsigned int flags = FLAG_STILL_NONE);
 	void ConfigureVideo(unsigned int flags = FLAG_VIDEO_NONE);
 	void ConfigureZsl(unsigned int still_flags = FLAG_STILL_NONE);
-	void RPiCamApp::ConfigureMultiStream(const StillOptions& stillOptions,
-                                     const VideoOptions& videoOptions,
-                                     const StillOptions& previewOptions,
+	void ConfigureMultiStream(StillOptions& stillOptions,
+                                     VideoOptions& videoOptions,
+                                     StillOptions& previewOptions,
                                      unsigned int flags);
 
 	void Teardown();

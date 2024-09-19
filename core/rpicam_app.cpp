@@ -605,9 +605,9 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 	LOG(2, "Video setup complete");
 }
 
-void RPiCamApp::ConfigureMultiStream(const StillOptions& stillOptions,
-                                     const VideoOptions& videoOptions,
-                                     const StillOptions& previewOptions,
+void RPiCamApp::ConfigureMultiStream(StillOptions& stillOptions,
+                                     VideoOptions& videoOptions,
+                                     StillOptions& previewOptions,
                                      unsigned int flags)
 {
     LOG(2, "=== Configuring multi-stream... ===");
@@ -672,7 +672,8 @@ void RPiCamApp::ConfigureMultiStream(const StillOptions& stillOptions,
     }
 
     // Set orientation for the streams
-    configuration_->transform = stillOptions.transform;
+    configuration_->orientation = libcamera::Orientation::Rotate0 * stillOptions.transform;
+
 
     // Apply denoise configuration
     configureDenoise(stillOptions.denoise == "auto" ? "cdn_fast" : stillOptions.denoise);

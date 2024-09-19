@@ -212,7 +212,12 @@ static void event_loop(RPiCamMjpegApp &app)
     if (multi_active)
     {
         // Call the multi-stream configuration function
-        app.ConfigureMultiStream(0); // Flags can be passed as needed
+        app.ConfigureMultiStream(
+            options->stillOptions,
+            options->videoOptions,
+            options->previewOptions,
+            0  // Flags can be passed as needed
+        );
         app.StartCamera();
     }
     else if (video_active)
