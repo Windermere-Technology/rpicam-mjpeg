@@ -247,12 +247,8 @@ static void event_loop(RPiCamMjpegApp &app)
 	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
-		//print fifo_command to console
-		std::cout << "FIFO Command: " << fifo_command << std::endl; //delete
 		if (fifo_command != "")
-		{
-			std::cout << "Got in!!! " << std::endl;//delete
-			
+		{			
 			LOG(2, "Got command from FIFO: " + fifo_command);
 
 			//split the fifo_commamd by space
@@ -306,8 +302,6 @@ static void event_loop(RPiCamMjpegApp &app)
 		// If video is active, check the elapsed time and limit to 5 seconds
 		if (video_active)
 		{
-			//print get in
-			std::cout << "Got in video_active" << std::endl;//delete
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
 
@@ -354,9 +348,6 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 			else if (preview_active || multi_active)
 			{
-				//print get in else if
-				std::cout << "Got in else if" << std::endl;//delete
-
 				// Save preview if not in still mode
 				StillOptions opts = options->previewOptions;
 				// If opts.width == 0, we should use "the default"
@@ -398,11 +389,6 @@ int main(int argc, char *argv[])
 
 		if (options->Parse(argc, argv))
 		{
-			//print preview, still and video options
-			std::cout << "Preview Options: " << options->previewOptions.output << std::endl;//delete
-			std::cout << "Still Options: " << options->stillOptions.output << std::endl;//delete
-			std::cout << "Video Options: " << options->videoOptions.output << std::endl;//delete
-
 			if (options->verbose >= 2)
 				options->Print();
 			if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
