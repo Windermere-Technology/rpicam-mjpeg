@@ -42,20 +42,22 @@ struct MjpegOptions : public Options
 			;
 		// clang-format on
 	}
+
 	virtual bool Parse(int argc, char *argv[]) override
 	{
+		std::vector<std::string> unrecognized;
 		// TODO: Modifications won't propogate down at this time.
-		if (stillOptions.Parse(argc, argv) == false)
+		if (stillOptions.Parse(argc, argv, &unrecognized) == false)
 			return false;
 
-		if (previewOptions.Parse(argc, argv) == false)
+		if (previewOptions.Parse(argc, argv, &unrecognized) == false)
 			return false;
 
-		if (videoOptions.Parse(argc, argv) == false)
+		if (videoOptions.Parse(argc, argv, &unrecognized) == false)
 			return false;
 
 		// NOTE: This will override the *Options.output members :)
-		if (Options::Parse(argc, argv) == false)
+		if (Options::Parse(argc, argv, &unrecognized) == false)
 			return false;
 
 		// Check if --output is used and throw an error if it's provided

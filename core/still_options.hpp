@@ -73,7 +73,12 @@ struct StillOptions : public Options
 
 	virtual bool Parse(int argc, char *argv[]) override
 	{
-		if (Options::Parse(argc, argv) == false)
+		return StillOptions::Parse(argc, argv, nullptr);
+	}
+
+	virtual bool Parse(int argc, char *argv[], std::vector<std::string> *unrecognized) override
+	{
+		if (Options::Parse(argc, argv, unrecognized) == false)
 			return false;
 
 		timelapse.set(timelapse_);
