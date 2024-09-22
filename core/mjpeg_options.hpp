@@ -45,20 +45,38 @@ struct MjpegOptions : public Options
 
 	virtual bool Parse(int argc, char *argv[]) override
 	{
-		std::vector<std::string> unrecognized;
+		/* We meed to union all the unrecognized options, since it is only those that
+		 * *nothing* recognized that are actually unrecognized by our program.
+		 * ie. --video-output ∈ MjpegOptions & --video-output ∉ VideoOptions
+		 *     ∴ --video-options ∉ (unrec(MjpegOptions) ∪ unrec(VideoOptions))
+		 *     ∴ --video-options is recognized.
+		 */
+		std::vector<std::string> unrecognized_tmp, unrecognized;
+		auto unrecognized_union = [&unrecognized_tmp, &unrecognized]() {
+			return std::set_union(
+				unrecognized_tmp.cbegin(), unrecognized_tmp.cend(),
+				unrecognized.cbegin(), unrecognized.cend(),
+				std::back_inserter(unrecognized)
+			);
+		};
+
 		// TODO: Modifications won't propogate down at this time.
 		if (stillOptions.Parse(argc, argv, &unrecognized) == false)
 			return false;
+		unrecognized_union();
 
 		if (previewOptions.Parse(argc, argv, &unrecognized) == false)
 			return false;
+		unrecognized_union();
 
 		if (videoOptions.Parse(argc, argv, &unrecognized) == false)
 			return false;
+		unrecognized_union();
 
 		// NOTE: This will override the *Options.output members :)
 		if (Options::Parse(argc, argv, &unrecognized) == false)
 			return false;
+		unrecognized_union();
 
 		// Check if --output is used and throw an error if it's provided
 		if (!output.empty())
@@ -71,7 +89,12 @@ struct MjpegOptions : public Options
 		{
 			throw std::runtime_error("At least one of --still-output, --video-output, or --preview-output should be provided.");
 		}
-		output = "/dev/null";
+
+		// Error if any unrecognised flags were provided
+		if (unrecognized.size())
+		{
+			throw boost::program_options::unknown_option(unrecognized[0]);
+		}
 
 
 		return true;
