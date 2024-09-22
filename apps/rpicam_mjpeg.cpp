@@ -104,19 +104,10 @@ public:
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
 						 libcamera::ControlList const &metadata, std::string const &filename,
-						 std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize,
-						 bool multiStream)
+						 std::string const &cam_model, StillOptions const *options)
 {
-	std::string output_filename = filename;
-
-	// Append "_preview.jpg" if multi-stream is enabled
-	if (multiStream)
-	{
-		output_filename += "_preview.jpg";
-	}
-
-	jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
-	LOG(1, "Saved preview image: " + output_filename);
+	jpeg_save(mem, info, metadata, filename, cam_model, options, options->width, options->height);
+	LOG(1, "Saved preview image: " + filename);
 }
 
 static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -351,10 +342,11 @@ static void event_loop(RPiCamMjpegApp &app)
 				// Save preview if not in still mode
 				StillOptions opts = options->previewOptions;
 				// If opts.width == 0, we should use "the default"
-				auto width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
-				auto height = opts.height ? opts.height : viewfinder_info.height;
+				opts.width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
+				opts.height = opts.height ? opts.height : viewfinder_info.height;
+
 				preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, opts.output,
-							 app.CameraModel(), &opts, libcamera::Size(width, height), multi_active);
+							 app.CameraModel(), &opts);
 				LOG(2, "Viewfinder (Preview) image saved");
 			}
 		}
