@@ -176,6 +176,7 @@ struct Options
 	TimeVal<std::chrono::microseconds> flicker_period;
 	bool no_raw;
 
+
 	virtual bool Parse(int argc, char *argv[]);
 	virtual void Print() const;
 
