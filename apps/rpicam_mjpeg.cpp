@@ -89,6 +89,7 @@ public:
 		}
 	}
 
+
 	// FIXME: This name is terrible!
 	// TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
 	std::string GetFifoCommand()
@@ -168,10 +169,12 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 					   const libcamera::ControlList &metadata, const std::string &filename,
 					   const std::string &cam_model, VideoOptions &options,
 					   const CompletedRequestPtr &completed_request, Stream *stream)
-{
+{   
 	// TODO: This probably shouldn't be setting these?
 	options.codec = "h264"; // Use H.264 codec for encoding
 	options.framerate = 15; // frames!!!!!
+
+
 
 	// Use the app instance to call initialize_encoder
 	app.initialize_encoder(options, info);
@@ -228,7 +231,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	}
 	else if (video_active)
 	{
-		app.ConfigureVideo();
+		app.ConfigureVideo(); // this function is in core/rpicam_app
 		app.StartCamera();
 	}
 	else if (preview_active || still_active)
