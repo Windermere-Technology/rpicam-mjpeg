@@ -66,8 +66,7 @@ At this stage, the subcommands are not configured to run concurrently:
 ```bash
 ./build/apps/rpicam-mjpeg --still-output /tmp/cam.jpg
 ```
-* `./build/apps/rpicam-mjpeg --still-output /tmp/cam.jpg` will save a timestamped JPEG every 3 seconds.
-  - Terminate with Ctrl+C.
+* `./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg` will save a timestamped JPEG.
   - Output files are saved in the `/tmp` directory.
     
 ### 3. Video Stream
@@ -87,6 +86,61 @@ At this stage, the subcommands are not configured to run concurrently:
 ```
 
 This will save a 5s MP4 video `vid.mp4`, and while the video is being captured, also output a preview stream at `/tmp/cam.jpg`
+
+---
+
+FIFO
+-----
+
+Currently, FIFO can take 3 different commands:
+
+Firstly, create FIFO by:
+```bash
+mkfifo /tmp/FIFO
+```
+
+### 1: Still Image Capture
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --still-output /tmp/cam.jpg --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'im' > /tmp/FIFO
+```
+Run this command to take a still picture :wink:
+
+
+
+### 2: Video Recording
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO --nopreview
+```
+
+On terminal b:
+```bash
+echo 'ca 1 10' > /tmp/FIFO
+```
+To record video for 10 seconds;
+Or
+```bash
+echo 'ca 0' > /tmp/FIFO
+```
+To stop recording. (TBD)
+
+### 3: Preview
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --preview-output /tmp/cam.jpg --fifo /tmp/FIFO --nopreview
+```
+
+On terminal b:
+```bash
+cho 'pv 1000 500' > /tmp/FIFO
+```
+To set the size of preview window as 1000 x 500.
 
 ---
 
