@@ -671,25 +671,20 @@ void RPiCamApp::ConfigureMultiStream(StillOptions& stillOptions,
         configuration_->sensorConfig->bitDepth = stillOptions.mode.bit_depth;
     }
 
-    // Set orientation for the streams
+    // Set orientation
     configuration_->orientation = libcamera::Orientation::Rotate0 * stillOptions.transform;
-
 
     // Apply denoise configuration
     configureDenoise(stillOptions.denoise == "auto" ? "cdn_fast" : stillOptions.denoise);
-
-    // Finalize the capture setup
     setupCapture();
 
-    // Map the streams to their names
+    // Map the streams
     streams_["viewfinder"] = viewfinder_cfg.stream();
     streams_["video"] = video_cfg.stream();
     if (stillOptions.raw)
         streams_["raw"] = configuration_->at(2).stream();
 
-    // Final post-processing configuration
     post_processor_.Configure();
-
     LOG(2, "Multi-stream setup complete");
 }
 
