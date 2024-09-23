@@ -553,11 +553,7 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 	cfg.bufferCount = 6; // 6 buffers is better than 4
 	if (options_->buffer_count > 0)
 		cfg.bufferCount = options_->buffer_count;
-	// if (options_->width)
-	// 	cfg.size.width = options_->width;
-	// if (options_->height)
-	// 	cfg.size.height = options_->height;
-
+	// added video specific width and height 
 	 if (mjpegOptions->videoOptions.width) {
         cfg.size.width = mjpegOptions->videoOptions.width;
     } else if (options_->width) {
