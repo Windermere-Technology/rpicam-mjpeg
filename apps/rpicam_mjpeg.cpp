@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
 {
 	try
 	{
-         // Initialize the resolution checker and print available video modes
+         // Initialize the resolution checker and print available video modes - for future use
         CameraResolutionChecker checker;
         std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
         std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;

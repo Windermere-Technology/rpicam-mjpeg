@@ -38,7 +38,7 @@ std::pair<int, int> CameraResolutionChecker::getHighestVideoResolution() {
                         maxHeight = height;
                     }
                 } catch (const std::invalid_argument &e) {
-                    std::cerr << "Error: Invalid number format in resolution." << std::endl;
+                    std::cerr << "Warning: Non-numeric data encountered in the resolution field. Skipping line." << std::endl;
                 } catch (const std::out_of_range &e) {
                     std::cerr << "Error: Number out of range in resolution." << std::endl;
                 }
