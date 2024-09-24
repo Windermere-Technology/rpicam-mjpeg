@@ -236,6 +236,8 @@ static void event_loop(RPiCamMjpegApp &app)
 	{
 		app.ConfigureVideo();
 		app.StartCamera();
+		// Don't immediately start recording if we getting external commands
+		video_active = options->fifo.empty();
 	}
 	else if (preview_active || still_active)
 	{
@@ -243,8 +245,8 @@ static void event_loop(RPiCamMjpegApp &app)
 		app.StartCamera();
 	}
 
-	// If video recording is active, set up a 5-second limit
-	int duration_limit_seconds = 5;
+	// -1 indicates indefinte recording (until `ca 0` recv'd.)
+	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
 	for (;;)
@@ -276,14 +278,21 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				if (tokens.size() < 2 || tokens[1] != "1")
 				{ // ca 0, or some invalid command.
-					video_active = false; //TODO: may need to break the current recording
+					if (video_active)  // finish up with the current recording.
+						app.cleanup();
+					video_active = false;
+
 				}
 				else
 				{
 					video_active = true;
 					start_time = std::chrono::steady_clock::now();
-					if (tokens.size() >= 3)
+					if (tokens.size() >= 3) {
 						duration_limit_seconds = stoi(tokens[2]);
+					} else {
+						// FIXME: Magic number :)
+						duration_limit_seconds = -1; // Indefinite
+					}
 				}
 			}
 			else if (tokens[0] == "pv")
@@ -303,8 +312,8 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 		}
 
-		// If video is active, check the elapsed time and limit to 5 seconds
-		if (video_active)
+		// If video is active and a duration is set, check the elapsed time
+		if (video_active && duration_limit_seconds >= 0)
 		{
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
