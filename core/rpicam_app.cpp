@@ -10,6 +10,7 @@
 #include "core/frame_info.hpp"
 #include "core/rpicam_app.hpp"
 #include "core/options.hpp"
+#include "core/mjpeg_options.hpp"
 #include "core/still_options.hpp"
 #include "core/video_options.hpp"
 
