@@ -11,6 +11,11 @@
 #include <ctime>
 #include <iomanip>
 #include <string>
+#include <system_error>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 
 #include "core/mjpeg_options.hpp"
 #include "core/rpicam_app.hpp"
@@ -88,16 +93,24 @@ public:
 	std::string GetFifoCommand()
 	{
 		static std::string fifo_path = GetOptions()->fifo;
-		static std::ifstream fifo { fifo_path };
+		static int fd = -1;
 
 		if (fifo_path == "")
 			return "";
 
-		std::string command;
-		std::getline(fifo, command);
-		// Reset EOF flag, so we can read in the future.
-		if (fifo.eof())
-			fifo.clear();
+		if (fd == -1) {
+			fd = open(fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
+			if (fd < 0) throw std::system_error(errno, std::generic_category(), fifo_path);
+		}
+
+		// FIXME: This is inefficient, obviously...
+		std::string command = "";
+		char c = '\0';
+		while (read(fd, &c, 1) > 0) {
+			if (c == '\n') break;
+			command += c;
+		}
+
 		return command;
 	}
 };
@@ -301,7 +314,6 @@ static void event_loop(RPiCamMjpegApp &app)
 				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
 				app.cleanup();
 				video_active = false;
-				if (!multi_active) break; // Exit the loop if not in multi-stream mode. Otherwise, wait for more commands.
 			}
 		}
 
