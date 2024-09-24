@@ -39,6 +39,9 @@ struct MjpegOptions : public Options
 			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
 				"Set the output still height (0 = use default value)")
 			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
+			// Break nopreview flag; the preview will not work in rpicam-mjpeg!
+			("nopreview,n", value<bool>(&nopreview)->default_value(true)->implicit_value(true),
+			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
 			;
 		// clang-format on
 	}
@@ -57,6 +60,9 @@ struct MjpegOptions : public Options
 		// NOTE: This will override the *Options.output members :)
 		if (Options::Parse(argc, argv) == false)
 			return false;
+
+		// Disable the preview window; it won't work.
+		nopreview = true;
 
 		// Check if --output is used and throw an error if it's provided
 		if (!output.empty())

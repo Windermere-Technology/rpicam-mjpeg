@@ -249,7 +249,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
-	for (;;)
+	while (video_active || preview_active || still_active || !options->fifo.empty())
 	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
