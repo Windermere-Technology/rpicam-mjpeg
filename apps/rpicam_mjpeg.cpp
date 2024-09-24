@@ -368,7 +368,11 @@ static void event_loop(RPiCamMjpegApp &app)
 				StillOptions opts = options->previewOptions;
 				// If opts.width == 0, we should use "the default"
 				opts.width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
-				opts.height = opts.height ? opts.height : viewfinder_info.height;
+
+				// Copied from RaspiMJPEG ;)
+				unsigned int height = (unsigned long int) opts.width*viewfinder_info.height/viewfinder_info.width;
+				height -= height%16;
+				opts.height = height;
 
 				preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, opts.output,
 							 app.CameraModel(), &opts);
