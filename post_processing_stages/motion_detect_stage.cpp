@@ -170,6 +170,8 @@ bool MotionDetectStage::Process(CompletedRequestPtr &completed_request)
 		return false;
 	}
 
+	LOG(1, "Not the first time");
+
 	bool motion_detected = false;
 	unsigned int regions = 0;
 
@@ -177,6 +179,7 @@ bool MotionDetectStage::Process(CompletedRequestPtr &completed_request)
 	// exceeds the threshold. At the same time, update the previous image buffer.
 	for (unsigned int y = 0; y < roi_height_; y++)
 	{
+		LOG(1, "y loop");
 		uint8_t *new_value_ptr = image + (roi_y_ + y) * lores_stride_ + roi_x_ * config_.hskip;
 		uint8_t *old_value_ptr = &previous_frame_[0] + y * roi_width_;
 		for (unsigned int x = 0; x < roi_width_; x++, new_value_ptr += config_.hskip)
@@ -185,6 +188,7 @@ bool MotionDetectStage::Process(CompletedRequestPtr &completed_request)
 			int old_value = *old_value_ptr;
 			*(old_value_ptr++) = new_value;
 			regions += std::abs(new_value - old_value) > config_.difference_m * old_value + config_.difference_c;
+			std::cout << "New value: " << new_value << ", old_value:" << old_value << std::endl;
 			motion_detected = regions >= region_threshold_;
 		}
 		std::cout << "going through pixels" << std::endl;
