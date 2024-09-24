@@ -242,22 +242,28 @@ static void event_loop(RPiCamMjpegApp &app)
 	// TODO: Remove this variable altogether... eventually
 	bool multi_active = ((int)preview_active + (int)still_active + (int)video_active) > 1;
 
-	if (multi_active)
-	{
-		// Call the multi-stream configuration function
-		app.ConfigureMultiStream(0); // Flags can be passed as needed
-		app.StartCamera();
-	}
-	else if (video_active)
-	{
-		app.ConfigureVideo(); // this function is in core/rpicam_app
-		app.StartCamera();
-	}
-	else if (preview_active || still_active)
-	{
-		app.ConfigureViewfinder();
-		app.StartCamera();
-	}
+
+    if (multi_active)
+    {
+        // Call the multi-stream configuration function
+        app.ConfigureMultiStream(
+            options->stillOptions,
+            options->videoOptions,
+            options->previewOptions,
+            0
+        );
+        app.StartCamera();
+    }
+    else if (video_active)
+    {
+        app.ConfigureVideo();
+        app.StartCamera();
+    }
+    else if (preview_active || still_active)
+    {
+        app.ConfigureViewfinder();
+        app.StartCamera();
+    }
 
 	// If video recording is active, set up a 5-second limit
 	int duration_limit_seconds = 5;

@@ -82,7 +82,7 @@ At this stage, the subcommands are not configured to run concurrently:
 
 ### 4. Multi Stream
 ```bash
-rpicam-mjpeg --video-output /tmp/vid.mp4 --preview-output /tmp/cam.jpg --preview-width 640 --preview-height 480
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --preview-output /tmp/cam.jpg --preview-width 640 --preview-height 480
 ```
 
 This will save a 5s MP4 video `vid.mp4`, and while the video is being captured, also output a preview stream at `/tmp/cam.jpg`
@@ -168,6 +168,11 @@ sudo meson install -C build
 
 This will ensure the previous build is removed, a fresh build is created, and the updated binaries are installed.
 
+## Multistream Stat
+**TODO:**
+- [x] Make use of 2 YUV streams and a RAW stream concurrently.
+- [ ] Modification to support MotionOptions
+- [ ] Assign RAW stream to motion
 
 License
 -------
@@ -178,3 +183,4 @@ Status
 ------
 
 [![ToT libcamera build/run test](https://github.com/raspberrypi/rpicam-apps/actions/workflows/rpicam-test.yml/badge.svg)](https://github.com/raspberrypi/rpicam-apps/actions/workflows/rpicam-test.yml)
+
