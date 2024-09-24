@@ -23,6 +23,9 @@
 #include "encoder/encoder.hpp"
 #include "output/file_output.hpp"
 
+// motion detection
+#include "post_processing_stages/motion_detect_stage.cpp"
+
 using namespace std::placeholders;
 using libcamera::Stream;
 
@@ -192,6 +195,45 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
 }
 
+// motion detect function
+static void motion_detect_save(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request) {
+    // Create an instance of MotionDetectStage
+    static MotionDetectStage motionDetectStage(&app);
+    
+    // Configure the motion detection stage
+    motionDetectStage.Configure();
+	bool detected = false;
+	// while (true) // Infinite loop; adjust as needed
+	// for (int i=0; i<3; i++)
+	// {
+	// 	detected = motionDetectStage.Process(completed_request);
+		
+	// 	if (detected) 
+	// 	{
+	// 		std::cout << "detected" << std::endl;
+	// 	} 
+	// 	else
+	// 	{
+	// 		std::cout << "repeat" << std::endl;
+	// 	}
+		
+	// 	// std::cout << "done" << std::endl; // This will print every iteration
+	// }
+
+	detected = motionDetectStage.Process(completed_request);
+		
+	if (detected) 
+	{
+		std::cout << "detected" << std::endl;
+	} 
+	else
+	{
+		std::cout << "repeat" << std::endl;
+	}
+	
+}
+
+
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -215,13 +257,15 @@ static void event_loop(RPiCamMjpegApp &app)
 
 	bool motion_active = options->stream == "motion";
 
+	bool motion_detect = options->stream == "motion_detect";
+
 	if (multi_active)
 	{
 		// Call the multi-stream configuration function
 		app.ConfigureMultiStream(0); // Flags can be passed as needed
 		app.StartCamera();
 	}
-	else if (video_active || motion_active)
+	else if (video_active || motion_active || motion_detect)
 	{
 		app.ConfigureVideo();
 		app.StartCamera();
@@ -289,6 +333,11 @@ static void event_loop(RPiCamMjpegApp &app)
 						   app.CameraModel(), options, libcamera::Size(viewfinder_info.width, viewfinder_info.height));
 				LOG(2, "Still image saved");
 			}
+
+			if (motion_detect){
+				LOG(1, "motion detect start"); 
+				motion_detect_save(app, completed_request);
+			}
 		}
 
 		// Process the VideoRecording stream
@@ -305,6 +354,11 @@ static void event_loop(RPiCamMjpegApp &app)
 						   options, libcamera::Size(video_info.width, video_info.height), completed_request,
 						   video_stream);
 				LOG(2, "Video recorded and saved");
+			}
+			
+			if (motion_detect){
+				LOG(1, "motion detect start"); 
+				motion_detect_save(app, completed_request);
 			}
 		}
 
@@ -328,9 +382,9 @@ int main(int argc, char *argv[])
 			if (options->stream.empty())
 				throw std::runtime_error("stream type required");
 			if (options->stream != "preview" && options->stream != "still" && options->stream != "video" &&
-				options->stream != "multi" && options->stream != "motion")
+				options->stream != "multi" && options->stream != "motion" && options->stream != "motion_detect")
 			{
-				throw std::runtime_error("stream type must be one of: preview, still, video, motion");
+				throw std::runtime_error("stream type must be one of: preview, still, video, motion_detect");
 			}
 			if (options->stream == "multi")
 			{
