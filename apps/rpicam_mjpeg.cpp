@@ -11,6 +11,8 @@
 #include <ctime>
 #include <iomanip>
 #include <string>
+#include <csignal> 
+#include <atomic>
 
 #include "core/mjpeg_options.hpp"
 #include "core/rpicam_app.hpp"
@@ -21,12 +23,25 @@
 #include "core/rpicam_encoder.hpp"
 #include "encoder/encoder.hpp"
 #include "output/file_output.hpp"
+//check camera resolution
+#include "cameraResolutionChecker.hpp"
 
 //check camera resolution
 #include "cameraResolutionChecker.hpp"
 
 using namespace std::placeholders;
 using libcamera::Stream;
+
+
+std::atomic<bool> stopRecording(false); // Global flag to indicate when to stop recording(Ctrl C)
+
+void signal_handler(int signal) // signal handler 
+    {
+        if (signal == SIGINT)
+        {
+            stopRecording = true; // Set the flag to true when SIGINT is caught
+        }
+    }
 
 class RPiCamMjpegApp : public RPiCamApp
 {
@@ -138,21 +153,11 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
 		if (period_index == std::string::npos)
 			period_index = filename.length();
 		std::string name = filename.substr(0, period_index);
-
-		// The date/timestamp
 		std::time_t now = std::time(nullptr);
-		struct tm *tm = localtime(&now);
-		size_t time_buff_size = 4 + 2 + 2 + 2 + 2 + 2 + 1; // strftime(NULL, 0, "%Y%m%d%H%M%S", tm);
-		char *time_buff = (char *)calloc(time_buff_size, sizeof(*time_buff));
-		assert(time_buff);
-		// As per silvanmelchior/userland/.../RaspiMJPEG.c:714... surely there is a better way?
-		strftime(time_buff, time_buff_size, "%Y%m%d%H%M%S", tm);
-		std::string timestamp(time_buff);
-		free(time_buff);
-
-		// FIXME: This is the "better way" to print the timestamp, but when I create buffer we start getting "libav: cannot open input device" in *video_save*??
-		// std::stringstream buffer;
-		// buffer << std::put_time(std::localtime(&t), "%Y%m%d%H%M%S");
+		// The date/timestamp
+		std::stringstream buffer;
+        buffer << std::put_time(std::localtime(&now), "%Y%m%d%H%M%S"); // Use &now instead of &t
+        std::string timestamp = buffer.str(); // Get the string from the buffer
 
 		// Extension
         std::string extension = filename.substr(period_index, filename.length());
@@ -170,11 +175,6 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 					   const std::string &cam_model, VideoOptions &options,
 					   const CompletedRequestPtr &completed_request, Stream *stream)
 {   
-	// TODO: This probably shouldn't be setting these?
-	options.codec = "h264"; // Use H.264 codec for encoding
-	options.framerate = 15; // frames!!!!!
-
-
 
 	// Use the app instance to call initialize_encoder
 	app.initialize_encoder(options, info);
@@ -270,7 +270,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	auto start_time = std::chrono::steady_clock::now();
 
 	for (;;)
-	{
+	{	
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
 		if (!fifo_command.empty())
@@ -317,6 +317,14 @@ static void event_loop(RPiCamMjpegApp &app)
 		{
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+
+			if (stopRecording)
+			{
+				LOG(1, "SIGINT caught. Stopping recording.");
+				app.cleanup();
+				video_active = false;  // Ensure video_active is set to false
+				break; 
+			}
 
 			if (elapsed_time >= duration_limit_seconds)
 			{
@@ -393,7 +401,8 @@ static void event_loop(RPiCamMjpegApp &app)
 }
 
 int main(int argc, char *argv[])
-{
+{	
+	std::signal(SIGINT, signal_handler); // deal with SIGINT
 	try
 	{
          // Initialize the resolution checker and print available video modes - for future use
