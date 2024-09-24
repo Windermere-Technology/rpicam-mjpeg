@@ -236,13 +236,17 @@ static void event_loop(RPiCamMjpegApp &app)
 	{
 		app.ConfigureVideo();
 		app.StartCamera();
-		// Don't immediately start recording if we getting external commands
-		video_active = options->fifo.empty();
 	}
 	else if (preview_active || still_active)
 	{
 		app.ConfigureViewfinder();
 		app.StartCamera();
+	}
+
+	// If accepting external commands, wait for them before running video/still captures.
+	if (!options->fifo.empty()) {
+		video_active = false;
+		still_active = false;
 	}
 
 	// -1 indicates indefinte recording (until `ca 0` recv'd.)
