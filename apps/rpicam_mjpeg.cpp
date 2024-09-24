@@ -22,6 +22,9 @@
 #include "encoder/encoder.hpp"
 #include "output/file_output.hpp"
 
+//check camera resolution
+#include "cameraResolutionChecker.hpp"
+
 using namespace std::placeholders;
 using libcamera::Stream;
 
@@ -35,6 +38,7 @@ public:
 	// Declare Encoder and FileOutput as member variables
 	std::unique_ptr<Encoder> h264Encoder;
 	std::unique_ptr<FileOutput> h264FileOutput;
+
 
 	// Function to initialize the encoder and file output
 	void initialize_encoder(VideoOptions &videoOptions, const StreamInfo &info)
@@ -58,7 +62,9 @@ public:
 		}
 
 		// Set encoder callbacks (if not already set)
-		h264Encoder->SetInputDoneCallback([](void *buffer) { LOG(1, "Input buffer done."); });
+		h264Encoder->SetInputDoneCallback([](void *buffer) { 
+            // LOG(1, "Input buffer done."); 
+        });
 
 		h264Encoder->SetOutputReadyCallback(
 			[this](void *data, size_t size, int64_t timestamp, bool keyframe)
@@ -82,6 +88,7 @@ public:
 			h264FileOutput.reset(); // Free the file output resources
 		}
 	}
+
 
 	// FIXME: This name is terrible!
 	// TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
@@ -160,20 +167,14 @@ static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamI
 // video_save function using app to manage encoder and file output
 static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<uint8_t>> &mem, const StreamInfo &info,
 					   const libcamera::ControlList &metadata, const std::string &filename,
-					   const std::string &cam_model, VideoOptions &options, libcamera::Size outputSize,
+					   const std::string &cam_model, VideoOptions &options,
 					   const CompletedRequestPtr &completed_request, Stream *stream)
-{
+{   
 	// TODO: This probably shouldn't be setting these?
 	options.codec = "h264"; // Use H.264 codec for encoding
 	options.framerate = 15; // frames!!!!!
 
-	// Ensure that the user-specified resolution is applied
-    if (outputSize.width != info.width || outputSize.height != info.height)
-    {
-        LOG(1, "Resizing video output to: " << outputSize.width << "x" << outputSize.height);
-        // Apply resizing logic here
-        
-    }
+
 
 	// Use the app instance to call initialize_encoder
 	app.initialize_encoder(options, info);
@@ -205,8 +206,27 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	}
 
 	// Encode the buffer using the H.264 encoder
-	LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
+	//LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
 	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
+}
+
+// Function to tokenize the FIFO command
+std::vector<std::string> tokenizer(const std::string& str, const std::string& delimiter) {
+    std::vector<std::string> tokens;
+    size_t pos = 0;
+    std::string token;
+    std::string s = str; // Make a copy of the input string to modify
+
+    while ((pos = s.find(delimiter)) != std::string::npos) {
+        token = s.substr(0, pos);
+        tokens.push_back(token);
+        s.erase(0, pos + delimiter.length());
+    }
+
+    // Add the last token
+    tokens.push_back(s);
+
+    return tokens;
 }
 
 // The main event loop for the application.
@@ -221,6 +241,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	bool video_active = !options->videoOptions.output.empty();
 	// TODO: Remove this variable altogether... eventually
 	bool multi_active = ((int)preview_active + (int)still_active + (int)video_active) > 1;
+
 
   if (multi_active)
   {
@@ -252,25 +273,12 @@ static void event_loop(RPiCamMjpegApp &app)
 	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
-		if (fifo_command != "")
+		if (!fifo_command.empty())
 		{			
 			LOG(2, "Got command from FIFO: " + fifo_command);
 
-			//split the fifo_commamd by space
-			std::string delimiter = " ";
-			size_t pos = 0;
-			std::string token;
-			std::vector<std::string> tokens; // Vector to store tokens
-
-			while ((pos = fifo_command.find(delimiter)) != std::string::npos)
-			{
-				token = fifo_command.substr(0, pos);
-				tokens.push_back(token);
-				fifo_command.erase(0, pos + delimiter.length());
-			}
-
-			// Add the last token
-			tokens.push_back(fifo_command);
+			// Split the fifo_command by space 
+			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
 
 			if (tokens[0] == "im") still_active = true; // Take a picture :)
 			else if (tokens[0] == "ca")
@@ -375,8 +383,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (video_active)
 			{
 				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
-						   app.CameraModel(), options->videoOptions,
-						   libcamera::Size(video_info.width, video_info.height), completed_request, video_stream);
+						   app.CameraModel(), options->videoOptions, completed_request, video_stream);
 				LOG(2, "Video recorded and saved");
 			}
 		}
@@ -389,6 +396,11 @@ int main(int argc, char *argv[])
 {
 	try
 	{
+         // Initialize the resolution checker and print available video modes - for future use
+        CameraResolutionChecker checker;
+        std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
+        std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
+
 		RPiCamMjpegApp app;
 		MjpegOptions *options = app.GetOptions();
 

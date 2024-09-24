@@ -178,6 +178,7 @@ struct Options
 
 
 	virtual bool Parse(int argc, char *argv[]);
+	virtual bool Parse(int argc, char *argv[], std::vector<std::string> *unrecognized);
 	virtual void Print() const;
 
 	virtual void SetApp(RPiCamApp *app) { app_ = app; }

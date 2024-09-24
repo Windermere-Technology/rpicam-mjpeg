@@ -534,6 +534,9 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 {
 	LOG(2, "Configuring video...");
 
+	// Cast the base options_ to MjpegOptions to access videoOptions
+    MjpegOptions *mjpegOptions = static_cast<MjpegOptions *>(options_.get());
+
 	bool have_lores_stream = options_->lores_width && options_->lores_height;
 	StreamRoles stream_roles = { StreamRole::VideoRecording };
 	int lores_index = 1;
@@ -551,10 +554,19 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 	cfg.bufferCount = 6; // 6 buffers is better than 4
 	if (options_->buffer_count > 0)
 		cfg.bufferCount = options_->buffer_count;
-	if (options_->width)
-		cfg.size.width = options_->width;
-	if (options_->height)
-		cfg.size.height = options_->height;
+	// added video specific width and height 
+	 if (mjpegOptions->videoOptions.width) {
+        cfg.size.width = mjpegOptions->videoOptions.width;
+    } else if (options_->width) {
+        cfg.size.width = options_->width;
+    }
+
+    if (mjpegOptions->videoOptions.height) {
+        cfg.size.height = mjpegOptions->videoOptions.height;
+    } else if (options_->height) {
+        cfg.size.height = options_->height;
+    }
+
 	if (flags & FLAG_VIDEO_JPEG_COLOURSPACE)
 		cfg.colorSpace = libcamera::ColorSpace::Sycc;
 	else if (cfg.size.width >= 1280 || cfg.size.height >= 720)

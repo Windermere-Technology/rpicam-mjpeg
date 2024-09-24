@@ -28,7 +28,7 @@ rpicam_jpeg = executable('rpicam-jpeg', files('rpicam_jpeg.cpp'),
                          link_with : rpicam_app,
                          install : true)
 
-rpicam_mjpeg = executable('rpicam-mjpeg', files('rpicam_mjpeg.cpp'),
+rpicam_mjpeg = executable('rpicam-mjpeg', files('rpicam_mjpeg.cpp', 'cameraResolutionChecker.cpp'),
                          include_directories : include_directories('..'),
                          dependencies: [libcamera_dep, boost_dep],
                          link_with : rpicam_app,
