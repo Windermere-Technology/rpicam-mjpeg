@@ -209,6 +209,25 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
 }
 
+// Function to tokenize the FIFO command
+std::vector<std::string> tokenizer(const std::string& str, const std::string& delimiter) {
+    std::vector<std::string> tokens;
+    size_t pos = 0;
+    std::string token;
+    std::string s = str; // Make a copy of the input string to modify
+
+    while ((pos = s.find(delimiter)) != std::string::npos) {
+        token = s.substr(0, pos);
+        tokens.push_back(token);
+        s.erase(0, pos + delimiter.length());
+    }
+
+    // Add the last token
+    tokens.push_back(s);
+
+    return tokens;
+}
+
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -247,25 +266,12 @@ static void event_loop(RPiCamMjpegApp &app)
 	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
-		if (fifo_command != "")
+		if (!fifo_command.empty())
 		{			
 			LOG(2, "Got command from FIFO: " + fifo_command);
 
-			//split the fifo_commamd by space
-			std::string delimiter = " ";
-			size_t pos = 0;
-			std::string token;
-			std::vector<std::string> tokens; // Vector to store tokens
-
-			while ((pos = fifo_command.find(delimiter)) != std::string::npos)
-			{
-				token = fifo_command.substr(0, pos);
-				tokens.push_back(token);
-				fifo_command.erase(0, pos + delimiter.length());
-			}
-
-			// Add the last token
-			tokens.push_back(fifo_command);
+			// Split the fifo_command by space 
+			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
 
 			if (tokens[0] == "im") still_active = true; // Take a picture :)
 			else if (tokens[0] == "ca")
