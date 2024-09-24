@@ -98,6 +98,9 @@ public:
 		if (fifo_path == "")
 			return "";
 
+		// NOTE: On the first read the FIFO will be blocking if we using normal
+		// C++ I/O (ifstream); so instead we create the FD ourselves so we can set
+		// the O_NONBLOCK flag :)
 		if (fd == -1) {
 			fd = open(fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
 			if (fd < 0) throw std::system_error(errno, std::generic_category(), fifo_path);
