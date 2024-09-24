@@ -315,17 +315,33 @@ Options::Options()
 
 bool Options::Parse(int argc, char *argv[])
 {
+	return Options::Parse(argc, argv, nullptr);
+}
+
+bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecognized)
+{
 	using namespace boost::program_options;
 	using namespace libcamera;
 	variables_map vm;
 	// Read options from the command line
 	// - Ignore unknown options, because MjpegOptions creates several Options objects...
 	// FIXME: Is there a way to do that without (technically) breaking the other apps?
-	store(
-		command_line_parser(argc, argv).options(options_).allow_unregistered().run(),
-		vm
-	);
+
+	basic_command_line_parser parser = command_line_parser(argc, argv).options(options_);
+	// Allow unrecognized/unrecognized if the user passed a vector to collect them into.
+	if (unrecognized != nullptr) {
+		parser = parser.allow_unregistered();
+	}
+
+	parsed_options parsed = parser.run();
+
+	store(parsed, vm);
 	notify(vm);
+
+	if (unrecognized != nullptr) {
+		*unrecognized = collect_unrecognized(parsed.options, include_positional);	
+	}
+
 	// Read options from a file if specified
 	std::ifstream ifs(config_file.c_str());
 	if (ifs)
