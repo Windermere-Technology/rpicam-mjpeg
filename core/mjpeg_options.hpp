@@ -18,14 +18,27 @@ struct MjpegOptions : public Options
 	MjpegOptions() : Options()
 	{
 		using namespace boost::program_options;
+
+		// Yoink'd: https://stackoverflow.com/a/28667150
+		auto in = [](int min, int max, std::string opt_name) {
+			return [opt_name, min, max](int value) {
+				if (value < min || value > max) {
+					throw validation_error(
+						validation_error::invalid_option_value,
+						opt_name,
+						std::to_string(value)
+					);
+				}
+			};
+		};
+
 		// clang-format off
 		options_.add_options()
 			("preview-output", value<std::string>(&previewOptions.output),
 				"Set the preview output file name")
-			("preview-width", value<unsigned int>(&previewOptions.width)->default_value(0),
-				"Set the output preview width (0 = use default value)")
-			("preview-height", value<unsigned int>(&previewOptions.height)->default_value(0),
-				"Set the output preview height (0 = use default value)")
+			("preview-width", value<unsigned int>(&previewOptions.width)->default_value(512)
+				->notifier(in(128, 1024, "preview-width")),
+				"Set the output preview width (min = 128, max = 1024)")
 			("video-output", value<std::string>(&videoOptions.output),
 				"Set the video output file name")
 			("video-width", value<unsigned int>(&videoOptions.width)->default_value(0),
@@ -39,6 +52,9 @@ struct MjpegOptions : public Options
 			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
 				"Set the output still height (0 = use default value)")
 			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
+			// Break nopreview flag; the preview will not work in rpicam-mjpeg!
+			("nopreview,n", value<bool>(&nopreview)->default_value(true)->implicit_value(true),
+			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
 			;
 		// clang-format on
 	}
@@ -77,6 +93,9 @@ struct MjpegOptions : public Options
 		if (Options::Parse(argc, argv, &unrecognized) == false)
 			return false;
 		unrecognized_union();
+
+		// Disable the preview window; it won't work.
+		nopreview = true;
 
 		// Check if --output is used and throw an error if it's provided
 		if (!output.empty())
