@@ -13,6 +13,11 @@
 #include <string>
 #include <csignal> 
 #include <atomic>
+#include <system_error>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
 
 #include "core/mjpeg_options.hpp"
 #include "core/rpicam_app.hpp"
@@ -110,35 +115,37 @@ public:
 	std::string GetFifoCommand()
 	{
 		static std::string fifo_path = GetOptions()->fifo;
-		static std::ifstream fifo { fifo_path };
+		static int fd = -1;
 
 		if (fifo_path == "")
 			return "";
 
-		std::string command;
-		std::getline(fifo, command);
-		// Reset EOF flag, so we can read in the future.
-		if (fifo.eof())
-			fifo.clear();
+		// NOTE: On the first read the FIFO will be blocking if we using normal
+		// C++ I/O (ifstream); so instead we create the FD ourselves so we can set
+		// the O_NONBLOCK flag :)
+		if (fd == -1) {
+			fd = open(fifo_path.c_str(), O_RDONLY | O_NONBLOCK);
+			if (fd < 0) throw std::system_error(errno, std::generic_category(), fifo_path);
+		}
+
+		// FIXME: This is inefficient, obviously...
+		std::string command = "";
+		char c = '\0';
+		while (read(fd, &c, 1) > 0) {
+			if (c == '\n') break;
+			command += c;
+		}
+
 		return command;
 	}
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
 						 libcamera::ControlList const &metadata, std::string const &filename,
-						 std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize,
-						 bool multiStream)
+						 std::string const &cam_model, StillOptions const *options)
 {
-	std::string output_filename = filename;
-
-	// Append "_preview.jpg" if multi-stream is enabled
-	if (multiStream)
-	{
-		output_filename += "_preview.jpg";
-	}
-
-	jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
-	LOG(1, "Saved preview image: " + output_filename);
+	jpeg_save(mem, info, metadata, filename, cam_model, options, options->width, options->height);
+	LOG(1, "Saved preview image: " + filename);
 }
 
 static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -265,12 +272,18 @@ static void event_loop(RPiCamMjpegApp &app)
         app.StartCamera();
     }
 
-	// If video recording is active, set up a 5-second limit
-	int duration_limit_seconds = 5;
+	// If accepting external commands, wait for them before running video/still captures.
+	if (!options->fifo.empty()) {
+		video_active = false;
+		still_active = false;
+	}
+
+	// -1 indicates indefinte recording (until `ca 0` recv'd.)
+	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
-	for (;;)
-	{	
+	while (video_active || preview_active || still_active || !options->fifo.empty())
+	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
 		if (!fifo_command.empty())
@@ -285,14 +298,21 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				if (tokens.size() < 2 || tokens[1] != "1")
 				{ // ca 0, or some invalid command.
-					video_active = false; //TODO: may need to break the current recording
+					if (video_active)  // finish up with the current recording.
+						app.cleanup();
+					video_active = false;
+
 				}
 				else
 				{
 					video_active = true;
 					start_time = std::chrono::steady_clock::now();
-					if (tokens.size() >= 3)
+					if (tokens.size() >= 3) {
 						duration_limit_seconds = stoi(tokens[2]);
+					} else {
+						// FIXME: Magic number :)
+						duration_limit_seconds = -1; // Indefinite
+					}
 				}
 			}
 			else if (tokens[0] == "pv")
@@ -312,8 +332,8 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 		}
 
-		// If video is active, check the elapsed time and limit to 5 seconds
-		if (video_active)
+		// If video is active and a duration is set, check the elapsed time
+		if (video_active && duration_limit_seconds >= 0)
 		{
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
@@ -331,7 +351,6 @@ static void event_loop(RPiCamMjpegApp &app)
 				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
 				app.cleanup();
 				video_active = false;
-				if (!multi_active) break; // Exit the loop if not in multi-stream mode. Otherwise, wait for more commands.
 			}
 		}
 
@@ -372,10 +391,15 @@ static void event_loop(RPiCamMjpegApp &app)
 				// Save preview if not in still mode
 				StillOptions opts = options->previewOptions;
 				// If opts.width == 0, we should use "the default"
-				auto width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
-				auto height = opts.height ? opts.height : viewfinder_info.height;
+				opts.width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
+
+				// Copied from RaspiMJPEG ;)
+				unsigned int height = (unsigned long int) opts.width*viewfinder_info.height/viewfinder_info.width;
+				height -= height%16;
+				opts.height = height;
+
 				preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, opts.output,
-							 app.CameraModel(), &opts, libcamera::Size(width, height), multi_active);
+							 app.CameraModel(), &opts);
 				LOG(2, "Viewfinder (Preview) image saved");
 			}
 		}
