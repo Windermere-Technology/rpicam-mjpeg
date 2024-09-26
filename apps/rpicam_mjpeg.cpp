@@ -40,20 +40,20 @@ using libcamera::Stream;
 
 std::atomic<bool> stopRecording(false); // Global flag to indicate when to stop recording(Ctrl C)
 
-void signal_handler(int signal) // signal handler 
-    {
-        if (signal == SIGINT)
-        {
-            stopRecording = true; // Set the flag to true when SIGINT is caught
-        }
-    }
+void signal_handler(int signal) // signal handler
+{
+	if (signal == SIGINT)
+	{
+		stopRecording = true; // Set the flag to true when SIGINT is caught
+	}
+}
 
 class RPiCamMjpegApp : public RPiCamApp
 {
 public:
-	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>())
-	{
-	}
+	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {}
+
+	~RPiCamMjpegApp() { cleanup(); }
 
 	MjpegOptions *GetOptions() const { return static_cast<MjpegOptions *>(options_.get()); }
 
@@ -67,22 +67,31 @@ public:
 	// TODO: Remove this variable altogether... eventually
 	bool multi_active;
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
+	std::optional<std::exception> error = std::nullopt;
 
 	// Get the application "status": https://github.com/roberttidey/userland/blob/e2b8cd0c80902d6aeb4f157c3cf1b1f61446b061/host_applications/linux/apps/raspicam/README_RaspiMJPEG.md
-	std::string status() {
+	std::string status()
+	{
+		if (error)
+			return std::string("Error: ") + (*error).what();
 		// NOTE: Considering that RaspiMJPEG would interrupt the video recording to
 		// take a still image, we are saying that the status is "image" whenever still
 		// is active, even though we might also be recording a video.
-		if (still_active) return "image"; // saving still
-		if (video_active) return "video"; // recording
-		if (preview_active) return "ready"; // preview only
+		if (still_active)
+			return "image"; // saving still
+		if (video_active)
+			return "video"; // recording
+		if (preview_active)
+			return "ready"; // preview only
 		return "halted"; // nothing
 	}
 
 	// Report the application status to --status-output file.
-	void WriteStatus() {
+	void WriteStatus()
+	{
 		std::string status_output = GetOptions()->status_output;
-		if (status_output.empty()) return;
+		if (status_output.empty())
+			return;
 		std::ofstream stream(status_output);
 		stream << status();
 	}
@@ -461,21 +470,28 @@ int main(int argc, char *argv[])
         std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
 
 		RPiCamMjpegApp app;
-		MjpegOptions *options = app.GetOptions();
-
-		if (options->Parse(argc, argv))
+		try
 		{
-			if (options->verbose >= 2)
-				options->Print();
-			if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
-				options->videoOptions.output.empty())
-				throw std::runtime_error(
-					"At least one of --preview-output, --still-output or --video-output should be provided.");
+			MjpegOptions *options = app.GetOptions();
 
-			event_loop(app);
+			if (options->Parse(argc, argv))
+			{
+				if (options->verbose >= 2)
+					options->Print();
+				if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
+					options->videoOptions.output.empty())
+					throw std::runtime_error(
+						"At least one of --preview-output, --still-output or --video-output should be provided.");
+
+				event_loop(app);
+			}
 		}
-		// Call cleanup after the event loop
-		app.cleanup();
+		catch (std::exception &e)
+		{
+			app.error = e;
+			app.WriteStatus();
+			throw;
+		}
 	}
 	catch (std::exception const &e)
 	{
