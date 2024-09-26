@@ -67,13 +67,13 @@ public:
 	// TODO: Remove this variable altogether... eventually
 	bool multi_active;
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
-	std::optional<std::exception> error = std::nullopt;
+	std::optional<std::string> error = std::nullopt;
 
 	// Get the application "status": https://github.com/roberttidey/userland/blob/e2b8cd0c80902d6aeb4f157c3cf1b1f61446b061/host_applications/linux/apps/raspicam/README_RaspiMJPEG.md
 	std::string status()
 	{
 		if (error)
-			return std::string("Error: ") + (*error).what();
+			return std::string("Error: ") + *error;
 		// NOTE: Considering that RaspiMJPEG would interrupt the video recording to
 		// take a still image, we are saying that the status is "image" whenever still
 		// is active, even though we might also be recording a video.
@@ -486,9 +486,9 @@ int main(int argc, char *argv[])
 				event_loop(app);
 			}
 		}
-		catch (std::exception &e)
+		catch (std::exception const &e)
 		{
-			app.error = e;
+			app.error = e.what();
 			app.WriteStatus();
 			throw;
 		}
