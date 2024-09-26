@@ -55,6 +55,8 @@ struct MjpegOptions : public Options
 			// Break nopreview flag; the preview will not work in rpicam-mjpeg!
 			("nopreview,n", value<bool>(&nopreview)->default_value(true)->implicit_value(true),
 			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
+			("status-output", value<std::string>(&status_output)->default_value("/dev/shm/mjpeg/status_mjpeg.txt"),
+				"Set the status output file name")
 			;
 		// clang-format on
 	}
@@ -127,7 +129,9 @@ struct MjpegOptions : public Options
 		videoOptions.SetApp(app);
 		Options::SetApp(app);
 	}
+
 	std::string fifo;
+	std::string status_output;
 
 	virtual void Print() const override
 	{
@@ -135,6 +139,8 @@ struct MjpegOptions : public Options
 		stillOptions.Print();
 		previewOptions.Print();
 		videoOptions.Print();
+		std::cerr << "    fifo: " << fifo << std::endl;
+		std::cerr << "    status-output: " << status_output << std::endl;
 	}
 
 	StillOptions stillOptions{};

@@ -79,6 +79,14 @@ public:
 		return "halted"; // nothing
 	}
 
+	// Report the application status to --status-output file.
+	void WriteStatus() {
+		std::string status_output = GetOptions()->status_output;
+		if (status_output.empty()) return;
+		std::ofstream stream(status_output);
+		stream << status();
+	}
+
 	// Function to initialize the encoder and file output
 	void initialize_encoder(VideoOptions &videoOptions, const StreamInfo &info)
 	{
@@ -348,6 +356,8 @@ static void event_loop(RPiCamMjpegApp &app)
 				}
 			}
 		}
+
+		app.WriteStatus();
 
 		// If video is active and a duration is set, check the elapsed time
 		if (app.video_active && duration_limit_seconds >= 0)
