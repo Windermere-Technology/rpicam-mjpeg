@@ -68,6 +68,17 @@ public:
 	bool multi_active;
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
 
+	// Get the application "status": https://github.com/roberttidey/userland/blob/e2b8cd0c80902d6aeb4f157c3cf1b1f61446b061/host_applications/linux/apps/raspicam/README_RaspiMJPEG.md
+	std::string status() {
+		// NOTE: Considering that RaspiMJPEG would interrupt the video recording to
+		// take a still image, we are saying that the status is "image" whenever still
+		// is active, even though we might also be recording a video.
+		if (still_active) return "image"; // saving still
+		if (video_active) return "video"; // recording
+		if (preview_active) return "ready"; // preview only
+		return "halted"; // nothing
+	}
+
 	// Function to initialize the encoder and file output
 	void initialize_encoder(VideoOptions &videoOptions, const StreamInfo &info)
 	{
@@ -153,7 +164,6 @@ static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, Strea
 						 std::string const &cam_model, StillOptions const *options)
 {
 	jpeg_save(mem, info, metadata, filename, cam_model, options, options->width, options->height);
-	LOG(1, "Saved preview image: " + filename);
 }
 
 static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -426,8 +436,7 @@ static void event_loop(RPiCamMjpegApp &app)
 				LOG(2, "Video recorded and saved");
 			}
 		}
-
-		LOG(2, "Request processing completed");
+		LOG(2, "Request processing completed, current status: " + app.status());
 	}
 }
 
