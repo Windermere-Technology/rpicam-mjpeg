@@ -59,13 +59,34 @@ void signal_handler(int signal) // signal handler
 class RPiCamMjpegApp : public RPiCamApp
 {
 public:
-	void handle_im_command(std::vector<std::string> tokens){
-		LOG(1, "Initializing encoder..asdasdad.");
-		LOG(1, "Successfully accessed im_command.");
+	void im_handle(std::vector<std::string> tokens, bool& still_active, bool& video_active, bool& preview_active){
+		still_active = true;
 	}
-	std::map<std::string, std::function<void(const std::vector<std::string>&) >> commands;
+	void ca_handle(std::vector<std::string> tokens, bool& still_active, bool& video_active, bool& preview_active){
+		if (tokens.size() < 2 || tokens[1] != "1")
+			{ // ca 0, or some invalid command.
+				if (video_active)  // finish up with the current recording.
+					cleanup();
+				video_active = false;
+
+			}
+		else
+		{
+			// video_active = true;
+			// start_time = std::chrono::steady_clock::now();
+			// if (tokens.size() >= 3) {
+			// 	duration_limit_seconds = stoi(tokens[2]);
+			// } else {
+			// 	// FIXME: Magic number :)
+			// 	duration_limit_seconds = -1; // Indefinite
+			// }
+		}
+		
+	}
+	std::map<std::string, std::function<void(const std::vector<std::string>&, bool&, bool&, bool&)>> commands;
 	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {
-		commands["im"] = std::bind(&RPiCamMjpegApp::handle_im_command, this, std::placeholders::_1);
+		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
 	}
 
 	MjpegOptions *GetOptions() const { return static_cast<MjpegOptions *>(options_.get()); }
@@ -250,14 +271,6 @@ std::vector<std::string> tokenizer(const std::string& str, const std::string& de
 
     return tokens;
 }
-
-void im_handle(std::vector<std::string> tokens, bool& still_active, bool& video_active, bool& preview_active){
-	still_active = true;
-}
-
-void ca_handle(std::vector<std::string> tokens, bool& still_active, bool& video_active, bool& preview_active){
-	
-}
 	
  
 // The main event loop for the application.
@@ -306,10 +319,6 @@ static void event_loop(RPiCamMjpegApp &app)
 	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
-	std::map<std::string, std::function<void(const std::vector<std::string>&, bool&, bool&, bool&)>> commands;
-	commands["im"] = im_handle;
-	//commands["ca"] = ca_handle;
-
 	while (video_active || preview_active || still_active || !options->fifo.empty())
 	{
 		// Check if there are any commands over the FIFO.
@@ -320,10 +329,10 @@ static void event_loop(RPiCamMjpegApp &app)
 
 			// Split the fifo_command by space 
 			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
-			auto it = commands.find(tokens[0]);
-			if (it != commands.end())
+			auto it = app.commands.find(tokens[0]);
+			if (it != app.commands.end())
 			{
-				commands[tokens[0]](tokens, still_active, video_active, preview_active); //Call associated command handler
+				app.commands[tokens[0]](tokens, still_active, video_active, preview_active); //Call associated command handler
 			}
 			else
 			{
