@@ -63,38 +63,41 @@ struct MjpegOptions : public Options
 
 	virtual bool Parse(int argc, char *argv[]) override
 	{
-		/* We meed to union all the unrecognized options, since it is only those that
-		 * *nothing* recognized that are actually unrecognized by our program.
-		 * ie. --video-output ∈ MjpegOptions & --video-output ∉ VideoOptions
-		 *     ∴ --video-options ∉ (unrec(MjpegOptions) ∪ unrec(VideoOptions))
-		 *     ∴ --video-options is recognized.
-		 */
+		// We need to intersect all the unrecognized options, since it is only those that
+		// *nothing* recognized that are actually unrecognized by our program.
 		std::vector<std::string> unrecognized_tmp, unrecognized;
-		auto unrecognized_union = [&unrecognized_tmp, &unrecognized]() {
-			return std::set_union(
-				unrecognized_tmp.cbegin(), unrecognized_tmp.cend(),
-				unrecognized.cbegin(), unrecognized.cend(),
-				std::back_inserter(unrecognized)
-			);
+		auto unrecognized_intersect = [&unrecognized_tmp, &unrecognized]()
+		{
+			std::vector<std::string> collector;
+			std::sort(unrecognized_tmp.begin(), unrecognized_tmp.end());
+			if (unrecognized.size() == 0)
+			{
+				unrecognized = unrecognized_tmp;
+				return;
+			}
+
+			std::set_intersection(unrecognized_tmp.cbegin(), unrecognized_tmp.cend(), unrecognized.cbegin(),
+								  unrecognized.cend(), std::back_inserter(collector));
+
+			unrecognized = collector;
 		};
 
-		// TODO: Modifications won't propogate down at this time.
-		if (stillOptions.Parse(argc, argv, &unrecognized) == false)
+		if (stillOptions.Parse(argc, argv, &unrecognized_tmp) == false)
 			return false;
-		unrecognized_union();
+		unrecognized_intersect();
 
-		if (previewOptions.Parse(argc, argv, &unrecognized) == false)
+		if (previewOptions.Parse(argc, argv, &unrecognized_tmp) == false)
 			return false;
-		unrecognized_union();
+		unrecognized_intersect();
 
-		if (videoOptions.Parse(argc, argv, &unrecognized) == false)
+		if (videoOptions.Parse(argc, argv, &unrecognized_tmp) == false)
 			return false;
-		unrecognized_union();
+		unrecognized_intersect();
 
 		// NOTE: This will override the *Options.output members :)
-		if (Options::Parse(argc, argv, &unrecognized) == false)
+		if (Options::Parse(argc, argv, &unrecognized_tmp) == false)
 			return false;
-		unrecognized_union();
+		unrecognized_intersect();
 
 		// Disable the preview window; it won't work.
 		nopreview = true;
