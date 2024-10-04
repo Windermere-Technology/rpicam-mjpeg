@@ -630,7 +630,9 @@ void RPiCamApp::ConfigureMultiStream(StillOptions& stillOptions,
     if (stillOptions.raw)
         stream_roles.push_back(StreamRole::Raw);
 
-    configuration_ = camera_->generateConfiguration(stream_roles);
+    if (!configuration_)
+		configuration_ = camera_->generateConfiguration(stream_roles);
+
     if (!configuration_)
         throw std::runtime_error("failed to generate multi-stream configuration");
 
