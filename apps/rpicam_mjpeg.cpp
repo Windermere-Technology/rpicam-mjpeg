@@ -227,6 +227,36 @@ public:
 		Configure(options);
 		StartCamera();
 	}
+
+	void fl_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+		if (args.size() > 1)
+			throw std::runtime_error("expected at most 1 argument to `fl` command");
+
+		// Default 0.
+		int value = args.size() == 0 ? 0 : std::stoi(args[0]);
+		// Set horisontal flip(hflip) and vertical flip(vflip). 0={hflip=0,vflip=0}, 1={hflip=1,vflip=0}, 2={hflip=0,vflip=1}, 3={hflip=1,vflip=1}, default: 0
+		bool hflip = value & 1;
+		bool vflip = value & 2;
+
+		Transform transform = Transform::Identity;
+		if (hflip) transform = Transform::HFlip * transform;
+		if (vflip) transform = Transform::VFlip * transform;
+
+		// TODO: Make MjpegOptions.transform propogate, somehow?
+		auto options = GetOptions();
+		options->transform = transform;
+		options->stillOptions.transform = transform;
+		options->videoOptions.transform = transform;
+		options->previewOptions.transform = transform;
+
+		// FIXME: Can we avoid resetting everything?
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -368,6 +398,11 @@ static void event_loop(RPiCamMjpegApp &app)
 			else if (tokens[0] == "ro")
 			{
 				app.ro_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "fl")
+			{
+				app.fl_handle(arguments);
 				continue;
 			}
 			else if (tokens[0] == "ca")
