@@ -207,19 +207,13 @@ public:
 			throw std::runtime_error("transforms requiring transpose not supported");
 		}
 
-		Transform transform = Transform::Identity;
 		bool ok;
 		Transform rot = transformFromRotation(rotation, &ok);
 		if (!ok)
 			throw std::runtime_error("unsupported rotation value: " + args[0]);
 
-		transform = transform * rot;
-		// TODO: Make MjpegOptions.transform propogate, somehow?
 		auto options = GetOptions();
-		options->transform = transform;
-		options->stillOptions.transform = transform;
-		options->videoOptions.transform = transform;
-		options->previewOptions.transform = transform;
+		options->rot(rot);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
@@ -240,16 +234,14 @@ public:
 		bool hflip = value & 1;
 		bool vflip = value & 2;
 
-		Transform transform = Transform::Identity;
-		if (hflip) transform = Transform::HFlip * transform;
-		if (vflip) transform = Transform::VFlip * transform;
-
-		// TODO: Make MjpegOptions.transform propogate, somehow?
 		auto options = GetOptions();
-		options->transform = transform;
-		options->stillOptions.transform = transform;
-		options->videoOptions.transform = transform;
-		options->previewOptions.transform = transform;
+
+		Transform flip = Transform::Identity;
+		if (hflip)
+			flip = Transform::HFlip * flip;
+		if (vflip)
+			flip = Transform::VFlip * flip;
+		options->flip(flip);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();

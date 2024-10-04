@@ -117,7 +117,6 @@ struct MjpegOptions : public Options
 			throw boost::program_options::unknown_option(unrecognized[0]);
 		}
 
-
 		return true;
 	}
 
@@ -143,8 +142,43 @@ struct MjpegOptions : public Options
 		std::cerr << "    status-output: " << status_output << std::endl;
 	}
 
-	StillOptions stillOptions{};
-	StillOptions previewOptions{};
-	VideoOptions videoOptions{};
+	StillOptions stillOptions {};
+	StillOptions previewOptions {};
+	VideoOptions videoOptions {};
 
+	/* We need to track the current rotation/flip independantly, but the
+	 * design of libcamera::Transform doesn't allow us to distinguish between
+	 * rot180 and (hflip * vflip), for example. So we use these wrappers :)
+	 * https://libcamera.org/api-html/namespacelibcamera.html#a371b6d17d531b85c035c4e889b116571
+	*/
+	libcamera::Transform rot() const { return rot_; }
+
+	void rot(libcamera::Transform value)
+	{
+		rot_ = value;
+		updateTransform();
+	};
+
+	libcamera::Transform flip() const { return flip_; }
+
+	void flip(libcamera::Transform value)
+	{
+		flip_ = value;
+		updateTransform();
+	}
+
+private:
+	libcamera::Transform rot_;
+	libcamera::Transform flip_;
+
+	void updateTransform()
+	{
+		using namespace libcamera;
+		// Recacluate the transform.
+		transform = Transform::Identity * flip_ * rot_;
+		// Apply the new transform to all our sub-9options.
+		stillOptions.transform = transform;
+		videoOptions.transform = transform;
+		previewOptions.transform = transform;
+	}
 };
