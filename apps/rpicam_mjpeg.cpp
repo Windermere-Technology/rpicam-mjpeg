@@ -249,6 +249,25 @@ public:
 		Configure(options);
 		StartCamera();
 	}
+
+	void pv_handle(std::vector<std::string> args)
+	{
+		// pv QQ WWW DD - set preview Quality, Width and Divider
+		if (args.size() < 3)
+			throw std::runtime_error("Expected three arguments to `pv` command");
+		
+
+		auto options = GetOptions();
+		options->previewOptions.quality = stoi(args[0]);
+		options->previewOptions.width = stoi(args[1]);
+		// TODO: Use the divider to set the frame rate somehow
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		preview_active = true;
+		StartCamera();
+	}
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -397,6 +416,10 @@ static void event_loop(RPiCamMjpegApp &app)
 				app.fl_handle(arguments);
 				continue;
 			}
+			else if (tokens[0] == "pv")
+			{
+				app.pv_handle(arguments);
+			}
 			else if (tokens[0] == "ca")
 			{
 				if (tokens.size() < 2 || tokens[1] != "1")
@@ -416,21 +439,6 @@ static void event_loop(RPiCamMjpegApp &app)
 						// FIXME: Magic number :)
 						duration_limit_seconds = -1; // Indefinite
 					}
-				}
-			}
-			else if (tokens[0] == "pv")
-			{
-				//OG: pv QQ WWW DD - set preview Quality, Width and Divider
-				//p05: pv Hight Width, may need to be consistent with OG
-				if (tokens.size() < 3)
-				{
-					std::cout << "Invalid command" << std::endl;
-				}
-				else
-				{
-					app.preview_active = true;
-					options->previewOptions.width = stoi(tokens[1]);
-					options->previewOptions.height = stoi(tokens[2]);
 				}
 			}
 		}
