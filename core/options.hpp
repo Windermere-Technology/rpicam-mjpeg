@@ -186,6 +186,9 @@ struct Options
 
 protected:
 	boost::program_options::options_description options_;
+	bool hflip() const { return hflip_; }
+	bool vflip() const { return vflip_; }
+	int rotation() const { return rotation_; }
 
 private:
 	bool hflip_;

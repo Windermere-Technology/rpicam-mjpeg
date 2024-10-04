@@ -63,6 +63,8 @@ struct MjpegOptions : public Options
 
 	virtual bool Parse(int argc, char *argv[]) override
 	{
+		using namespace libcamera;
+
 		// We need to intersect all the unrecognized options, since it is only those that
 		// *nothing* recognized that are actually unrecognized by our program.
 		std::vector<std::string> unrecognized_tmp, unrecognized;
@@ -119,6 +121,17 @@ struct MjpegOptions : public Options
 		{
 			throw boost::program_options::unknown_option(unrecognized[0]);
 		}
+
+		// Save the actual rotation/flip applied by the settings, as we need this later.
+		bool ok;
+		rot(transformFromRotation(rotation(), &ok));
+		assert(ok && "This should have failed already if it was going to.");
+		Transform flip_ = Transform::Identity;
+		if (vflip())
+			flip_ = flip_ * Transform::VFlip;
+		if (hflip())
+			flip_ = flip_ * Transform::HFlip;
+		flip(flip_);
 
 		return true;
 	}
