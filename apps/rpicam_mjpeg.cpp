@@ -72,7 +72,7 @@ public:
 			}
 		else
 		{
-			// video_active = true;
+			video_active = true;
 			// start_time = std::chrono::steady_clock::now();
 			// if (tokens.size() >= 3) {
 			// 	duration_limit_seconds = stoi(tokens[2]);
@@ -83,10 +83,25 @@ public:
 		}
 		
 	}
+	void pv_handle(std::vector<std::string> tokens, bool& still_active, bool& video_active, bool& preview_active){
+		if (tokens.size() < 3)
+		{
+			std::cout << "Invalid command" << std::endl;
+		}
+		else
+		{
+			preview_active = true;
+			MjpegOptions *options = GetOptions();
+			options->previewOptions.width = stoi(tokens[1]);
+			options->previewOptions.height = stoi(tokens[2]);
+		}
+		
+	}
 	std::map<std::string, std::function<void(const std::vector<std::string>&, bool&, bool&, bool&)>> commands;
 	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {
 		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
 		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
 	}
 
 	MjpegOptions *GetOptions() const { return static_cast<MjpegOptions *>(options_.get()); }
@@ -325,11 +340,12 @@ static void event_loop(RPiCamMjpegApp &app)
 		std::string fifo_command = app.GetFifoCommand();
 		if (!fifo_command.empty())
 		{			
-			LOG(2, "Got command from FIFO: " + fifo_command);
+			LOG(1, "Got command from FIFO: " + fifo_command);
 
 			// Split the fifo_command by space 
 			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
 			auto it = app.commands.find(tokens[0]);
+			LOG(1, "Got command from FIFO: " + tokens[0]);
 			if (it != app.commands.end())
 			{
 				app.commands[tokens[0]](tokens, still_active, video_active, preview_active); //Call associated command handler
