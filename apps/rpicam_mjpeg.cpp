@@ -213,7 +213,7 @@ public:
 			throw std::runtime_error("unsupported rotation value: " + args[0]);
 
 		auto options = GetOptions();
-		options->rot(rot);
+		options->SetRotation(rot);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
@@ -241,7 +241,7 @@ public:
 			flip = Transform::HFlip * flip;
 		if (vflip)
 			flip = Transform::VFlip * flip;
-		options->flip(flip);
+		options->SetFlip(flip);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
