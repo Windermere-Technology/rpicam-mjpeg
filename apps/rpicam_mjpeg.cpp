@@ -59,10 +59,10 @@ void signal_handler(int signal) // signal handler
 class RPiCamMjpegApp : public RPiCamApp
 {
 public:
-	void im_handle(std::vector<std::string> tokens, bool& still_active, bool& video_active, bool& preview_active){
+	void im_handle(std::vector<std::string> tokens, bool& still_active){
 		still_active = true;
 	}
-	void ca_handle(std::vector<std::string> tokens, bool& still_active, bool& video_active, bool& preview_active){
+	void ca_handle(std::vector<std::string> tokens, bool& video_active){
 		if (tokens.size() < 2 || tokens[1] != "1")
 			{ // ca 0, or some invalid command.
 				if (video_active)  // finish up with the current recording.
@@ -83,7 +83,7 @@ public:
 		}
 		
 	}
-	void pv_handle(std::vector<std::string> tokens, bool& still_active, bool& video_active, bool& preview_active){
+	void pv_handle(std::vector<std::string> tokens, bool& preview_active){
 		if (tokens.size() < 3)
 		{
 			std::cout << "Invalid command" << std::endl;
@@ -99,9 +99,9 @@ public:
 	}
 	std::map<std::string, std::function<void(const std::vector<std::string>&, bool&, bool&, bool&)>> commands;
 	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {
-		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
-		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
-		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
+		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this, std::placeholders::_1, std::placeholders::_2);
+		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_3);
+		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1, std::placeholders::_4);
 	}
 
 	MjpegOptions *GetOptions() const { return static_cast<MjpegOptions *>(options_.get()); }
@@ -179,13 +179,23 @@ public:
 			if (fd < 0) throw std::system_error(errno, std::generic_category(), fifo_path);
 		}
 
-		// FIXME: This is inefficient, obviously...
+		// FIXED: buffered reader minimizes number of function calls to read
 		std::string command = "";
-		char c = '\0';
-		while (read(fd, &c, 1) > 0) {
-			if (c == '\n') break;
-			command += c;
+		char buffer[32];
+		int bytes_read;
+		while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
+			char* newline = std::find(buffer, buffer + bytes_read, '\n');
+			if (newline != buffer + bytes_read) {
+				command.append(buffer, newline - buffer);
+				break;
+			}
+			command.append(buffer, bytes_read);
 		}
+		// char c = '\0';
+		// while (read(fd, &c, 1) > 0) {
+		// 	if (c == '\n') break;
+		// 	command += c;
+		// }
 
 		return command;
 	}
