@@ -62,7 +62,7 @@ public:
 	void im_handle(std::vector<std::string> tokens, bool& still_active){
 		still_active = true;
 	}
-	void ca_handle(std::vector<std::string> tokens, bool& video_active){
+	void ca_handle(std::vector<std::string> tokens, bool& video_active, std::chrono::time_point<std::chrono::steady_clock>& start_time, int& duration_limit_seconds){
 		if (tokens.size() < 2 || tokens[1] != "1")
 			{ // ca 0, or some invalid command.
 				if (video_active)  // finish up with the current recording.
@@ -73,13 +73,13 @@ public:
 		else
 		{
 			video_active = true;
-			// start_time = std::chrono::steady_clock::now();
-			// if (tokens.size() >= 3) {
-			// 	duration_limit_seconds = stoi(tokens[2]);
-			// } else {
-			// 	// FIXME: Magic number :)
-			// 	duration_limit_seconds = -1; // Indefinite
-			// }
+			start_time = std::chrono::steady_clock::now();
+			if (tokens.size() >= 3) {
+				duration_limit_seconds = stoi(tokens[2]);
+			} else {
+				// FIXME: Magic number :)
+				duration_limit_seconds = -1; // Indefinite
+			}
 		}
 		
 	}
@@ -97,10 +97,10 @@ public:
 		}
 		
 	}
-	std::map<std::string, std::function<void(const std::vector<std::string>&, bool&, bool&, bool&)>> commands;
+	std::map<std::string, std::function<void(const std::vector<std::string>&, bool&, bool&, bool&, std::chrono::time_point<std::chrono::steady_clock>&, int&)>> commands;
 	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {
 		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this, std::placeholders::_1, std::placeholders::_2);
-		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_3);
+		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_3, std::placeholders::_5, std::placeholders::_6);
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1, std::placeholders::_4);
 	}
 
@@ -184,18 +184,12 @@ public:
 		char buffer[32];
 		int bytes_read;
 		while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
-			char* newline = std::find(buffer, buffer + bytes_read, '\n');
-			if (newline != buffer + bytes_read) {
-				command.append(buffer, newline - buffer);
+			if (buffer[bytes_read - 1] == '\n') {
+				command.append(buffer, bytes_read - 1);
 				break;
 			}
 			command.append(buffer, bytes_read);
 		}
-		// char c = '\0';
-		// while (read(fd, &c, 1) > 0) {
-		// 	if (c == '\n') break;
-		// 	command += c;
-		// }
 
 		return command;
 	}
@@ -355,10 +349,9 @@ static void event_loop(RPiCamMjpegApp &app)
 			// Split the fifo_command by space 
 			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
 			auto it = app.commands.find(tokens[0]);
-			LOG(1, "Got command from FIFO: " + tokens[0]);
 			if (it != app.commands.end())
 			{
-				app.commands[tokens[0]](tokens, still_active, video_active, preview_active); //Call associated command handler
+				app.commands[tokens[0]](tokens, still_active, video_active, preview_active, start_time, duration_limit_seconds); //Call associated command handler
 			}
 			else
 			{
