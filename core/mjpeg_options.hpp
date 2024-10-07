@@ -182,6 +182,20 @@ struct MjpegOptions : public Options
 		flip_ = value;
 		updateTransform();
 	}
+
+	void SetAwb(std::string new_awb)
+	{
+		// NOTE: This will throw if we got an unhandled value.
+		auto new_awb_index = Options::AwbLookup(new_awb);
+		awb = new_awb;
+		awb_index = new_awb_index;
+		stillOptions.awb = new_awb;
+		stillOptions.awb_index = new_awb_index;
+		previewOptions.awb = new_awb;
+		previewOptions.awb_index = new_awb_index;
+		videoOptions.awb = new_awb;
+		videoOptions.awb_index = new_awb_index;
+	}
 private:
 	libcamera::Transform rot_;
 	libcamera::Transform flip_;

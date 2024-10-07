@@ -318,6 +318,25 @@ bool Options::Parse(int argc, char *argv[])
 	return Options::Parse(argc, argv, nullptr);
 }
 
+int Options::AwbLookup(std::string awb)
+{
+	std::map<std::string, int> awb_table =
+		{ { "auto", libcamera::controls::AwbAuto },
+			{ "normal", libcamera::controls::AwbAuto },
+			{ "incandescent", libcamera::controls::AwbIncandescent },
+			{ "tungsten", libcamera::controls::AwbTungsten },
+			{ "fluorescent", libcamera::controls::AwbFluorescent },
+			{ "indoor", libcamera::controls::AwbIndoor },
+			{ "daylight", libcamera::controls::AwbDaylight },
+			{ "cloudy", libcamera::controls::AwbCloudy },
+			{ "custom", libcamera::controls::AwbCustom },
+			// TODO: How should we support "off", "shade", "flash" AWB modes?
+			{ "sun", libcamera::controls::AwbDaylight } };
+	if (awb_table.count(awb) == 0)
+		throw std::runtime_error("Invalid AWB mode: " + awb);
+	return awb_table[awb];
+}
+
 bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecognized)
 {
 	using namespace boost::program_options;
@@ -630,19 +649,7 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 		throw std::runtime_error("Invalid afSpeed mode:" + afSpeed);
 	afSpeed_index = afSpeed_table[afSpeed];
 
-	std::map<std::string, int> awb_table =
-		{ { "auto", libcamera::controls::AwbAuto },
-			{ "normal", libcamera::controls::AwbAuto },
-			{ "incandescent", libcamera::controls::AwbIncandescent },
-			{ "tungsten", libcamera::controls::AwbTungsten },
-			{ "fluorescent", libcamera::controls::AwbFluorescent },
-			{ "indoor", libcamera::controls::AwbIndoor },
-			{ "daylight", libcamera::controls::AwbDaylight },
-			{ "cloudy", libcamera::controls::AwbCloudy },
-			{ "custom", libcamera::controls::AwbCustom } };
-	if (awb_table.count(awb) == 0)
-		throw std::runtime_error("Invalid AWB mode: " + awb);
-	awb_index = awb_table[awb];
+	awb_index = Options::AwbLookup(awb);
 
 	if (sscanf(awbgains.c_str(), "%f,%f", &awb_gain_r, &awb_gain_b) != 2)
 		throw std::runtime_error("Invalid AWB gains");

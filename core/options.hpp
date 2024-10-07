@@ -184,6 +184,8 @@ struct Options
 	virtual void SetApp(RPiCamApp *app) { app_ = app; }
 	Platform GetPlatform() const { return platform_; };
 
+	static int AwbLookup(std::string awb);
+
 protected:
 	boost::program_options::options_description options_;
 	bool hflip() const { return hflip_; }

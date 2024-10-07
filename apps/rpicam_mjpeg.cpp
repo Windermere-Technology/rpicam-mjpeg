@@ -268,6 +268,24 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+
+	void wb_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly one argument to `wb` command");
+
+		std::string awb = args[0];
+		// NOTE: This will throw if we got an unhandled value.
+		auto options = GetOptions();
+		options->SetAwb(awb);
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -419,6 +437,10 @@ static void event_loop(RPiCamMjpegApp &app)
 			else if (tokens[0] == "pv")
 			{
 				app.pv_handle(arguments);
+			}
+			else if (tokens[0] == "wb")
+			{
+				app.wb_handle(arguments);
 			}
 			else if (tokens[0] == "ca")
 			{
