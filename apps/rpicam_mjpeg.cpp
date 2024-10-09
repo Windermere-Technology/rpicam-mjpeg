@@ -209,35 +209,22 @@ static void motion_detect_save(RPiCamMjpegApp &app, CompletedRequestPtr &complet
 		motionDetectStage.Configure();
 		firstTime = false;
 	}
-	bool detected = false;
+	
 
-	// while (true) // Infinite loop; adjust as needed
-	// for (int i=0; i<3; i++)
+	motionDetectStage.Process(completed_request);
+
+	// bool detected = false;
+
+	// detected = motionDetectStage.Process(completed_request);
+		
+	// if (detected) 
 	// {
-	// 	detected = motionDetectStage.Process(completed_request);
-		
-	// 	if (detected) 
-	// 	{
-	// 		std::cout << "detected" << std::endl;
-	// 	} 
-	// 	else
-	// 	{
-	// 		std::cout << "repeat" << std::endl;
-	// 	}
-		
-	// 	// std::cout << "done" << std::endl; // This will print every iteration
+	// 	LOG(1, "yes");
+	// } 
+	// else
+	// {
+	// 	LOG(1, "no");
 	// }
-
-	detected = motionDetectStage.Process(completed_request);
-		
-	if (detected) 
-	{
-		std::cout << "detected" << std::endl;
-	} 
-	else
-	{
-		std::cout << "repeat" << std::endl;
-	}
 	
 }
 
@@ -360,7 +347,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 			
 			if (motion_detect){
-				LOG(1, "motion detect start"); 
+				// LOG(1, "motion detect start"); 
 				motion_detect_save(app, completed_request);
 			}
 		}
