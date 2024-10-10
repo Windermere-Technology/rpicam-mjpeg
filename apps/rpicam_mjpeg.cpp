@@ -268,6 +268,83 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+
+	void RPiCamMjpegApp::co_handle(std::vector<std::string> args)
+{
+    if (args.size() != 1)
+        throw std::runtime_error("expected exactly 1 argument to `co` command");
+
+    float contrast = std::stof(args[0]);  // Use float for contrast
+    if (contrast < -100.0f || contrast > 100.0f)
+        throw std::runtime_error("contrast value out of range, must be between -100 and 100");
+
+    auto options = GetOptions();
+    options->contrast = contrast;
+	LOG(1, "Contrast updated to: " << options->contrast);  // Log the updated contrast value
+
+    StopCamera();
+    Teardown();
+    Configure(options);
+    StartCamera();
+}
+
+void RPiCamMjpegApp::br_handle(std::vector<std::string> args)
+{
+    if (args.size() != 1)
+        throw std::runtime_error("expected exactly 1 argument to `br` command");
+
+    float brightness = std::stof(args[0]);  // Use float for brightness
+    if (brightness < 0.0f || brightness > 100.0f)
+        throw std::runtime_error("brightness value out of range, must be between 0 and 100");
+
+    auto options = GetOptions();
+    options->brightness = brightness;
+	LOG(1, "Brightness updated to: " << options->brightness);  // Log the updated brightness value
+
+    StopCamera();
+    Teardown();
+    Configure(options);
+    StartCamera();
+}
+
+void RPiCamMjpegApp::sa_handle(std::vector<std::string> args)
+{
+    if (args.size() != 1)
+        throw std::runtime_error("expected exactly 1 argument to `sa` command");
+
+    float saturation = std::stof(args[0]);  // Use float for saturation
+    if (saturation < -100.0f || saturation > 100.0f)
+        throw std::runtime_error("saturation value out of range, must be between -100 and 100");
+
+    auto options = GetOptions();
+    options->saturation = saturation;
+	LOG(1, "Saturation updated to: " << options->saturation);  // Log the updated saturation value
+
+    StopCamera();
+    Teardown();
+    Configure(options);
+    StartCamera();
+}
+
+void RPiCamMjpegApp::ss_handle(std::vector<std::string> args)
+{
+    if (args.size() != 1)
+        throw std::runtime_error("expected exactly 1 argument to `ss` command");
+
+    int shutter_speed = std::stoi(args[0]);  
+    if (shutter_speed < 0)
+        throw std::runtime_error("shutter speed value must be positive");
+
+    auto options = GetOptions();
+    options->shutter = std::chrono::microseconds(shutter_speed);
+	LOG(1, "Shutter speed updated to: " << options->shutter);  // Log the updated shutter speed value
+
+    StopCamera();
+    Teardown();
+    Configure(options);
+    StartCamera();
+}
+
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
