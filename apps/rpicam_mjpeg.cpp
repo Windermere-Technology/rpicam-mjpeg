@@ -358,43 +358,6 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				std::cout << "Invalid command: " << tokens[0] << std::endl;
 			}
-			// if (tokens[0] == "im") still_active = true; // Take a picture :)
-			// else if (tokens[0] == "ca")
-			// {
-			// 	if (tokens.size() < 2 || tokens[1] != "1")
-			// 	{ // ca 0, or some invalid command.
-			// 		if (video_active)  // finish up with the current recording.
-			// 			app.cleanup();
-			// 		video_active = false;
-
-			// 	}
-			// 	else
-			// 	{
-			// 		video_active = true;
-			// 		start_time = std::chrono::steady_clock::now();
-			// 		if (tokens.size() >= 3) {
-			// 			duration_limit_seconds = stoi(tokens[2]);
-			// 		} else {
-			// 			// FIXME: Magic number :)
-			// 			duration_limit_seconds = -1; // Indefinite
-			// 		}
-			// 	}
-			// }
-			// else if (tokens[0] == "pv")
-			// {
-			// 	//OG: pv QQ WWW DD - set preview Quality, Width and Divider
-			// 	//p05: pv Hight Width, may need to be consistent with OG
-			// 	if (tokens.size() < 3)
-			// 	{
-			// 		std::cout << "Invalid command" << std::endl;
-			// 	}
-			// 	else
-			// 	{
-			// 		preview_active = true;
-			// 		options->previewOptions.width = stoi(tokens[1]);
-			// 		options->previewOptions.height = stoi(tokens[2]);
-			// 	}
-			// }
 		}
 
 		// If video is active and a duration is set, check the elapsed time
