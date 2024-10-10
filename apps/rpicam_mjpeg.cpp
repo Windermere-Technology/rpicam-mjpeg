@@ -58,35 +58,9 @@ void signal_handler(int signal) // signal handler
 class RPiCamMjpegApp : public RPiCamApp
 {
 public:
-	void im_handle(std::vector<std::string> tokens){
-		still_active = true;
-	}
-
-	void ca_handle(std::vector<std::string> tokens, std::chrono::time_point<std::chrono::steady_clock>& start_time, int& duration_limit_seconds){
-		if (tokens.size() < 2 || tokens[1] != "1")
-			{ // ca 0, or some invalid command.
-				if (video_active)  // finish up with the current recording.
-					cleanup();
-				video_active = false;
-
-			}
-		else
-		{
-			video_active = true;
-			start_time = std::chrono::steady_clock::now();
-			if (tokens.size() >= 3) {
-				duration_limit_seconds = stoi(tokens[2]);
-			} else {
-				// FIXME: Magic number :)
-				duration_limit_seconds = -1; // Indefinite
-			}
-		}
-		
-	}
-
 	std::map<std::string, std::function<void(const std::vector<std::string>&, std::chrono::time_point<std::chrono::steady_clock>&, int&)>> commands;
 	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {
-		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this, std::placeholders::_1);
+		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this);
 		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
@@ -293,6 +267,32 @@ public:
 		Teardown();
 		Configure(options);
 		StartCamera();
+	}
+
+	void im_handle(){
+		still_active = true;
+	}
+
+	void ca_handle(std::vector<std::string> tokens, std::chrono::time_point<std::chrono::steady_clock>& start_time, int& duration_limit_seconds){
+		if (tokens.size() < 2 || tokens[1] != "1")
+			{ // ca 0, or some invalid command.
+				if (video_active)  // finish up with the current recording.
+					cleanup();
+				video_active = false;
+
+			}
+		else
+		{
+			video_active = true;
+			start_time = std::chrono::steady_clock::now();
+			if (tokens.size() >= 3) {
+				duration_limit_seconds = stoi(tokens[2]);
+			} else {
+				// FIXME: Magic number :)
+				duration_limit_seconds = -1; // Indefinite
+			}
+		}
+		
 	}
 
 	void pv_handle(std::vector<std::string> args)
