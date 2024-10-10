@@ -269,7 +269,7 @@ public:
 		StartCamera();
 	}
 
-	void RPiCamMjpegApp::co_handle(std::vector<std::string> args)
+	void co_handle(std::vector<std::string> args)
 {
     if (args.size() != 1)
         throw std::runtime_error("expected exactly 1 argument to `co` command");
@@ -288,7 +288,7 @@ public:
     StartCamera();
 }
 
-void RPiCamMjpegApp::br_handle(std::vector<std::string> args)
+void br_handle(std::vector<std::string> args)
 {
     if (args.size() != 1)
         throw std::runtime_error("expected exactly 1 argument to `br` command");
@@ -307,7 +307,7 @@ void RPiCamMjpegApp::br_handle(std::vector<std::string> args)
     StartCamera();
 }
 
-void RPiCamMjpegApp::sa_handle(std::vector<std::string> args)
+void sa_handle(std::vector<std::string> args)
 {
     if (args.size() != 1)
         throw std::runtime_error("expected exactly 1 argument to `sa` command");
@@ -326,7 +326,7 @@ void RPiCamMjpegApp::sa_handle(std::vector<std::string> args)
     StartCamera();
 }
 
-void RPiCamMjpegApp::ss_handle(std::vector<std::string> args)
+void ss_handle(std::vector<std::string> args)
 {
     if (args.size() != 1)
         throw std::runtime_error("expected exactly 1 argument to `ss` command");
@@ -336,14 +336,21 @@ void RPiCamMjpegApp::ss_handle(std::vector<std::string> args)
         throw std::runtime_error("shutter speed value must be positive");
 
     auto options = GetOptions();
-    options->shutter = std::chrono::microseconds(shutter_speed);
-	LOG(1, "Shutter speed updated to: " << options->shutter);  // Log the updated shutter speed value
+
+    // Convert the shutter speed to a string and pass it to the set method
+    options->shutter.set(std::to_string(shutter_speed));
+
+    LOG(1, "Shutter speed updated to: " << shutter_speed << " microseconds");
 
     StopCamera();
     Teardown();
     Configure(options);
     StartCamera();
 }
+
+
+
+
 
 };
 
@@ -497,6 +504,26 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				app.pv_handle(arguments);
 			}
+			else if (tokens[0] == "co")  // Contrast command
+			{
+				app.co_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "br")  // Brightness command
+			{
+				app.br_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "sa")  // Saturation command
+			{
+				app.sa_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "ss")  // Shutter speed command
+			{
+				app.ss_handle(arguments);
+				continue;
+			}
 			else if (tokens[0] == "ca")
 			{
 				if (tokens.size() < 2 || tokens[1] != "1")
@@ -517,26 +544,6 @@ static void event_loop(RPiCamMjpegApp &app)
 						duration_limit_seconds = -1; // Indefinite
 					}
 				}
-			}
-			else if (tokens[0] == "co")  // Contrast command
-			{
-				app.co_handle(arguments);
-				continue;
-			}
-			else if (tokens[0] == "br")  // Brightness command
-			{
-				app.br_handle(arguments);
-				continue;
-			}
-			else if (tokens[0] == "sa")  // Saturation command
-			{
-				app.sa_handle(arguments);
-				continue;
-			}
-			else if (tokens[0] == "ss")  // Shutter speed command
-			{
-				app.ss_handle(arguments);
-				continue;
 			}
 
 		}
