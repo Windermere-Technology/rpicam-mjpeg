@@ -348,6 +348,7 @@ static void event_loop(RPiCamMjpegApp &app)
 
 			// Split the fifo_command by space 
 			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
+			// check for existing command
 			auto it = app.commands.find(tokens[0]);
 			if (it != app.commands.end())
 			{
@@ -355,7 +356,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 			else
 			{
-				std::cout << "I don't know what is: " << tokens[0]<< std::endl;
+				std::cout << "Invalid command: " << tokens[0] << std::endl;
 			}
 			// if (tokens[0] == "im") still_active = true; // Take a picture :)
 			// else if (tokens[0] == "ca")
