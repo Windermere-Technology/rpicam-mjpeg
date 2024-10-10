@@ -518,6 +518,27 @@ static void event_loop(RPiCamMjpegApp &app)
 					}
 				}
 			}
+			else if (tokens[0] == "co")  // Contrast command
+			{
+				app.co_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "br")  // Brightness command
+			{
+				app.br_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "sa")  // Saturation command
+			{
+				app.sa_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "ss")  // Shutter speed command
+			{
+				app.ss_handle(arguments);
+				continue;
+			}
+
 		}
 
 		app.WriteStatus();
