@@ -45,24 +45,24 @@
 using namespace std::placeholders;
 using libcamera::Stream;
 
-
 std::atomic<bool> stopRecording(false); // Global flag to indicate when to stop recording(Ctrl C)
 
-void signal_handler(int signal) // signal handler 
-    {
-        if (signal == SIGINT)
-        {
-            stopRecording = true; // Set the flag to true when SIGINT is caught
-        }
-    }
+void signal_handler(int signal) // signal handler
+{
+	if (signal == SIGINT)
+	{
+		stopRecording = true; // Set the flag to true when SIGINT is caught
+	}
+}
 
 class RPiCamMjpegApp : public RPiCamApp
 {
 public:
-	void im_handle(std::vector<std::string> tokens, bool& still_active){
+	void im_handle(std::vector<std::string> tokens){
 		still_active = true;
 	}
-	void ca_handle(std::vector<std::string> tokens, bool& video_active, std::chrono::time_point<std::chrono::steady_clock>& start_time, int& duration_limit_seconds){
+
+	void ca_handle(std::vector<std::string> tokens, std::chrono::time_point<std::chrono::steady_clock>& start_time, int& duration_limit_seconds){
 		if (tokens.size() < 2 || tokens[1] != "1")
 			{ // ca 0, or some invalid command.
 				if (video_active)  // finish up with the current recording.
@@ -83,26 +83,17 @@ public:
 		}
 		
 	}
-	void pv_handle(std::vector<std::string> tokens, bool& preview_active){
-		if (tokens.size() < 3)
-		{
-			std::cout << "Invalid command" << std::endl;
-		}
-		else
-		{
-			preview_active = true;
-			MjpegOptions *options = GetOptions();
-			options->previewOptions.width = stoi(tokens[1]);
-			options->previewOptions.height = stoi(tokens[2]);
-		}
-		
-	}
-	std::map<std::string, std::function<void(const std::vector<std::string>&, bool&, bool&, bool&, std::chrono::time_point<std::chrono::steady_clock>&, int&)>> commands;
+
+	std::map<std::string, std::function<void(const std::vector<std::string>&, std::chrono::time_point<std::chrono::steady_clock>&, int&)>> commands;
 	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {
-		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this, std::placeholders::_1, std::placeholders::_2);
-		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_3, std::placeholders::_5, std::placeholders::_6);
-		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1, std::placeholders::_4);
+		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this, std::placeholders::_1);
+		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
+		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
+		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
 	}
+
+	~RPiCamMjpegApp() { cleanup(); }
 
 	MjpegOptions *GetOptions() const { return static_cast<MjpegOptions *>(options_.get()); }
 
@@ -110,6 +101,57 @@ public:
 	std::unique_ptr<Encoder> h264Encoder;
 	std::unique_ptr<FileOutput> h264FileOutput;
 
+	bool preview_active;
+	bool still_active;
+	bool video_active;
+	// TODO: Remove this variable altogether... eventually
+	bool multi_active;
+	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
+	std::optional<std::string> error = std::nullopt;
+
+	// Get the application "status": https://github.com/roberttidey/userland/blob/e2b8cd0c80902d6aeb4f157c3cf1b1f61446b061/host_applications/linux/apps/raspicam/README_RaspiMJPEG.md
+	std::string status()
+	{
+		if (error)
+			return std::string("Error: ") + *error;
+		// NOTE: Considering that RaspiMJPEG would interrupt the video recording to
+		// take a still image, we are saying that the status is "image" whenever still
+		// is active, even though we might also be recording a video.
+		if (still_active)
+			return "image"; // saving still
+		if (video_active)
+			return "video"; // recording
+		if (preview_active)
+			return "ready"; // preview only
+		return "halted"; // nothing
+	}
+
+	// Report the application status to --status-output file.
+	void WriteStatus()
+	{
+		std::string status_output = GetOptions()->status_output;
+		if (status_output.empty())
+			return;
+		std::ofstream stream(status_output);
+		stream << status();
+	}
+
+	void Configure(MjpegOptions *options)
+	{
+		if (multi_active)
+		{
+			// Call the multi-stream configuration function
+			ConfigureMultiStream(options->stillOptions, options->videoOptions, options->previewOptions, 0);
+		}
+		else if (video_active)
+		{
+			ConfigureVideo();
+		}
+		else if (preview_active || still_active)
+		{
+			ConfigureViewfinder();
+		}
+	}
 
 	// Function to initialize the encoder and file output
 	void initialize_encoder(VideoOptions &videoOptions, const StreamInfo &info)
@@ -193,6 +235,84 @@ public:
 
 		return command;
 	}
+
+	void ro_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+
+		if (args.size() > 1)
+			throw std::runtime_error("expected at most 1 argument to `ro` command");
+
+		// Default (no arguments) is 0 degrees.
+		int rotation = args.size() == 0 ? 0 : std::stoi(args[0]) % 360;
+
+		if (rotation != 0 && rotation != 180)
+		{
+			// https://github.com/raspberrypi/rpicam-apps/issues/505
+			throw std::runtime_error("transforms requiring transpose not supported");
+		}
+
+		bool ok;
+		Transform rot = transformFromRotation(rotation, &ok);
+		if (!ok)
+			throw std::runtime_error("unsupported rotation value: " + args[0]);
+
+		auto options = GetOptions();
+		options->rot(rot);
+
+		// FIXME: Can we avoid resetting everything?
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void fl_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+		if (args.size() > 1)
+			throw std::runtime_error("expected at most 1 argument to `fl` command");
+
+		// Default 0.
+		int value = args.size() == 0 ? 0 : std::stoi(args[0]);
+		// Set horisontal flip(hflip) and vertical flip(vflip). 0={hflip=0,vflip=0}, 1={hflip=1,vflip=0}, 2={hflip=0,vflip=1}, 3={hflip=1,vflip=1}, default: 0
+		bool hflip = value & 1;
+		bool vflip = value & 2;
+
+		auto options = GetOptions();
+
+		Transform flip = Transform::Identity;
+		if (hflip)
+			flip = Transform::HFlip * flip;
+		if (vflip)
+			flip = Transform::VFlip * flip;
+		options->flip(flip);
+
+		// FIXME: Can we avoid resetting everything?
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void pv_handle(std::vector<std::string> args)
+	{
+		// pv QQ WWW DD - set preview Quality, Width and Divider
+		if (args.size() < 3)
+			throw std::runtime_error("Expected three arguments to `pv` command");
+		
+
+		auto options = GetOptions();
+		options->previewOptions.quality = stoi(args[0]);
+		options->previewOptions.width = stoi(args[1]);
+		// TODO: Use the divider to set the frame rate somehow
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		preview_active = true;
+		StartCamera();
+	}
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -200,7 +320,6 @@ static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, Strea
 						 std::string const &cam_model, StillOptions const *options)
 {
 	jpeg_save(mem, info, metadata, filename, cam_model, options, options->width, options->height);
-	LOG(1, "Saved preview image: " + filename);
 }
 
 static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -297,48 +416,27 @@ static void event_loop(RPiCamMjpegApp &app)
 {
 	MjpegOptions *options = app.GetOptions();
 
+	// FIXME: app should probably know how to set these...
+	app.preview_active = !options->previewOptions.output.empty();
+	app.still_active = !options->stillOptions.output.empty();
+	app.video_active = !options->videoOptions.output.empty();
+	app.multi_active = ((int)app.preview_active + (int)app.still_active + (int)app.video_active) > 1;
+
 	app.OpenCamera();
-
-	bool preview_active = !options->previewOptions.output.empty();
-	bool still_active = !options->stillOptions.output.empty();
-	bool video_active = !options->videoOptions.output.empty();
-	// TODO: Remove this variable altogether... eventually
-	bool multi_active = ((int)preview_active + (int)still_active + (int)video_active) > 1;
-
-
-    if (multi_active)
-    {
-        // Call the multi-stream configuration function
-        app.ConfigureMultiStream(
-            options->stillOptions,
-            options->videoOptions,
-            options->previewOptions,
-            0
-        );
-        app.StartCamera();
-    }
-    else if (video_active)
-    {
-        app.ConfigureVideo();
-        app.StartCamera();
-    }
-    else if (preview_active || still_active)
-    {
-        app.ConfigureViewfinder();
-        app.StartCamera();
-    }
+	app.Configure(options);
+	app.StartCamera();
 
 	// If accepting external commands, wait for them before running video/still captures.
-	if (!options->fifo.empty()) {
-		video_active = false;
-		still_active = false;
+	if (app.fifo_active()) {
+		app.video_active = false;
+		app.still_active = false;
 	}
 
 	// -1 indicates indefinte recording (until `ca 0` recv'd.)
 	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
-	while (video_active || preview_active || still_active || !options->fifo.empty())
+	while (app.video_active || app.preview_active || app.still_active || app.fifo_active())
 	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
@@ -346,13 +444,14 @@ static void event_loop(RPiCamMjpegApp &app)
 		{			
 			LOG(1, "Got command from FIFO: " + fifo_command);
 
-			// Split the fifo_command by space 
+			// Split the fifo_command by space
 			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
+			std::vector<std::string> arguments = std::vector<std::string>(tokens.begin() + 1, tokens.end());
 			// check for existing command
 			auto it = app.commands.find(tokens[0]);
 			if (it != app.commands.end())
 			{
-				app.commands[tokens[0]](tokens, still_active, video_active, preview_active, start_time, duration_limit_seconds); //Call associated command handler
+				app.commands[tokens[0]](arguments, start_time, duration_limit_seconds); //Call associated command handler
 			}
 			else
 			{
@@ -360,8 +459,10 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 		}
 
+		app.WriteStatus();
+
 		// If video is active and a duration is set, check the elapsed time
-		if (video_active && duration_limit_seconds >= 0)
+		if (app.video_active && duration_limit_seconds >= 0)
 		{
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
@@ -370,7 +471,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				LOG(1, "SIGINT caught. Stopping recording.");
 				app.cleanup();
-				video_active = false;  // Ensure video_active is set to false
+				app.video_active = false;  // Ensure video_active is set to false
 				break; 
 			}
 
@@ -378,7 +479,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
 				app.cleanup();
-				video_active = false;
+				app.video_active = false;
 			}
 		}
 
@@ -405,16 +506,16 @@ static void event_loop(RPiCamMjpegApp &app)
 			BufferReadSync r(&app, completed_request->buffers[viewfinder_stream]);
 			const std::vector<libcamera::Span<uint8_t>> viewfinder_mem = r.Get();
 
-			if (still_active)
+			if (app.still_active)
 			{
 				// Save still image instead of preview when still_active is set
 				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
 						   app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
 				
 				LOG(2, "Still image saved");
-				still_active = false;
+				app.still_active = false;
 			}
-			else if (preview_active || multi_active)
+			else if (app.preview_active || app.multi_active)
 			{
 				// Save preview if not in still mode
 				StillOptions opts = options->previewOptions;
@@ -440,15 +541,14 @@ static void event_loop(RPiCamMjpegApp &app)
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
 			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
 
-			if (video_active)
+			if (app.video_active)
 			{
 				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
 						   app.CameraModel(), options->videoOptions, completed_request, video_stream);
 				LOG(2, "Video recorded and saved");
 			}
 		}
-
-		LOG(2, "Request processing completed");
+		LOG(2, "Request processing completed, current status: " + app.status());
 	}
 }
 
@@ -463,21 +563,28 @@ int main(int argc, char *argv[])
         std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
 
 		RPiCamMjpegApp app;
-		MjpegOptions *options = app.GetOptions();
-
-		if (options->Parse(argc, argv))
+		try
 		{
-			if (options->verbose >= 2)
-				options->Print();
-			if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
-				options->videoOptions.output.empty())
-				throw std::runtime_error(
-					"At least one of --preview-output, --still-output or --video-output should be provided.");
+			MjpegOptions *options = app.GetOptions();
 
-			event_loop(app);
+			if (options->Parse(argc, argv))
+			{
+				if (options->verbose >= 2)
+					options->Print();
+				if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
+					options->videoOptions.output.empty())
+					throw std::runtime_error(
+						"At least one of --preview-output, --still-output or --video-output should be provided.");
+
+				event_loop(app);
+			}
 		}
-		// Call cleanup after the event loop
-		app.cleanup();
+		catch (std::exception const &e)
+		{
+			app.error = e.what();
+			app.WriteStatus();
+			throw;
+		}
 	}
 	catch (std::exception const &e)
 	{
