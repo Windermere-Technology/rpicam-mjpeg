@@ -37,7 +37,6 @@
 using namespace std::placeholders;
 using libcamera::Stream;
 
-
 std::atomic<bool> stopRecording(false); // Global flag to indicate when to stop recording(Ctrl C)
 
 void signal_handler(int signal) // signal handler
@@ -94,6 +93,23 @@ public:
 			return;
 		std::ofstream stream(status_output);
 		stream << status();
+	}
+
+	void Configure(MjpegOptions *options)
+	{
+		if (multi_active)
+		{
+			// Call the multi-stream configuration function
+			ConfigureMultiStream(options->stillOptions, options->videoOptions, options->previewOptions, 0);
+		}
+		else if (video_active)
+		{
+			ConfigureVideo();
+		}
+		else if (preview_active || still_active)
+		{
+			ConfigureViewfinder();
+		}
 	}
 
 	// Function to initialize the encoder and file output
@@ -173,6 +189,84 @@ public:
 		}
 
 		return command;
+	}
+
+	void ro_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+
+		if (args.size() > 1)
+			throw std::runtime_error("expected at most 1 argument to `ro` command");
+
+		// Default (no arguments) is 0 degrees.
+		int rotation = args.size() == 0 ? 0 : std::stoi(args[0]) % 360;
+
+		if (rotation != 0 && rotation != 180)
+		{
+			// https://github.com/raspberrypi/rpicam-apps/issues/505
+			throw std::runtime_error("transforms requiring transpose not supported");
+		}
+
+		bool ok;
+		Transform rot = transformFromRotation(rotation, &ok);
+		if (!ok)
+			throw std::runtime_error("unsupported rotation value: " + args[0]);
+
+		auto options = GetOptions();
+		options->rot(rot);
+
+		// FIXME: Can we avoid resetting everything?
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void fl_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+		if (args.size() > 1)
+			throw std::runtime_error("expected at most 1 argument to `fl` command");
+
+		// Default 0.
+		int value = args.size() == 0 ? 0 : std::stoi(args[0]);
+		// Set horisontal flip(hflip) and vertical flip(vflip). 0={hflip=0,vflip=0}, 1={hflip=1,vflip=0}, 2={hflip=0,vflip=1}, 3={hflip=1,vflip=1}, default: 0
+		bool hflip = value & 1;
+		bool vflip = value & 2;
+
+		auto options = GetOptions();
+
+		Transform flip = Transform::Identity;
+		if (hflip)
+			flip = Transform::HFlip * flip;
+		if (vflip)
+			flip = Transform::VFlip * flip;
+		options->flip(flip);
+
+		// FIXME: Can we avoid resetting everything?
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void pv_handle(std::vector<std::string> args)
+	{
+		// pv QQ WWW DD - set preview Quality, Width and Divider
+		if (args.size() < 3)
+			throw std::runtime_error("Expected three arguments to `pv` command");
+		
+
+		auto options = GetOptions();
+		options->previewOptions.quality = stoi(args[0]);
+		options->previewOptions.width = stoi(args[1]);
+		// TODO: Use the divider to set the frame rate somehow
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		preview_active = true;
+		StartCamera();
 	}
 };
 
@@ -283,28 +377,8 @@ static void event_loop(RPiCamMjpegApp &app)
 	app.multi_active = ((int)app.preview_active + (int)app.still_active + (int)app.video_active) > 1;
 
 	app.OpenCamera();
-
-    if (app.multi_active)
-    {
-        // Call the multi-stream configuration function
-        app.ConfigureMultiStream(
-            options->stillOptions,
-            options->videoOptions,
-            options->previewOptions,
-            0
-        );
-        app.StartCamera();
-    }
-    else if (app.video_active)
-    {
-        app.ConfigureVideo();
-        app.StartCamera();
-    }
-    else if (app.preview_active || app.still_active)
-    {
-        app.ConfigureViewfinder();
-        app.StartCamera();
-    }
+	app.Configure(options);
+	app.StartCamera();
 
 	// If accepting external commands, wait for them before running video/still captures.
 	if (app.fifo_active()) {
@@ -324,10 +398,28 @@ static void event_loop(RPiCamMjpegApp &app)
 		{			
 			LOG(2, "Got command from FIFO: " + fifo_command);
 
-			// Split the fifo_command by space 
+			// Split the fifo_command by space
 			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
+			std::vector<std::string> arguments = std::vector<std::string>(tokens.begin() + 1, tokens.end());
 
-			if (tokens[0] == "im") app.still_active = true; // Take a picture :)
+			if (tokens[0] == "im")
+			{
+				app.still_active = true; // Take a picture :)
+			}
+			else if (tokens[0] == "ro")
+			{
+				app.ro_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "fl")
+			{
+				app.fl_handle(arguments);
+				continue;
+			}
+			else if (tokens[0] == "pv")
+			{
+				app.pv_handle(arguments);
+			}
 			else if (tokens[0] == "ca")
 			{
 				if (tokens.size() < 2 || tokens[1] != "1")
@@ -347,21 +439,6 @@ static void event_loop(RPiCamMjpegApp &app)
 						// FIXME: Magic number :)
 						duration_limit_seconds = -1; // Indefinite
 					}
-				}
-			}
-			else if (tokens[0] == "pv")
-			{
-				//OG: pv QQ WWW DD - set preview Quality, Width and Divider
-				//p05: pv Hight Width, may need to be consistent with OG
-				if (tokens.size() < 3)
-				{
-					std::cout << "Invalid command" << std::endl;
-				}
-				else
-				{
-					app.preview_active = true;
-					options->previewOptions.width = stoi(tokens[1]);
-					options->previewOptions.height = stoi(tokens[2]);
 				}
 			}
 		}

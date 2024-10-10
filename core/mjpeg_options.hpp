@@ -63,38 +63,43 @@ struct MjpegOptions : public Options
 
 	virtual bool Parse(int argc, char *argv[]) override
 	{
-		/* We meed to union all the unrecognized options, since it is only those that
-		 * *nothing* recognized that are actually unrecognized by our program.
-		 * ie. --video-output ∈ MjpegOptions & --video-output ∉ VideoOptions
-		 *     ∴ --video-options ∉ (unrec(MjpegOptions) ∪ unrec(VideoOptions))
-		 *     ∴ --video-options is recognized.
-		 */
+		using namespace libcamera;
+
+		// We need to intersect all the unrecognized options, since it is only those that
+		// *nothing* recognized that are actually unrecognized by our program.
 		std::vector<std::string> unrecognized_tmp, unrecognized;
-		auto unrecognized_union = [&unrecognized_tmp, &unrecognized]() {
-			return std::set_union(
-				unrecognized_tmp.cbegin(), unrecognized_tmp.cend(),
-				unrecognized.cbegin(), unrecognized.cend(),
-				std::back_inserter(unrecognized)
-			);
+		auto unrecognized_intersect = [&unrecognized_tmp, &unrecognized]()
+		{
+			std::vector<std::string> collector;
+			std::sort(unrecognized_tmp.begin(), unrecognized_tmp.end());
+			if (unrecognized.size() == 0)
+			{
+				unrecognized = unrecognized_tmp;
+				return;
+			}
+
+			std::set_intersection(unrecognized_tmp.cbegin(), unrecognized_tmp.cend(), unrecognized.cbegin(),
+								  unrecognized.cend(), std::back_inserter(collector));
+
+			unrecognized = collector;
 		};
 
-		// TODO: Modifications won't propogate down at this time.
-		if (stillOptions.Parse(argc, argv, &unrecognized) == false)
+		if (stillOptions.Parse(argc, argv, &unrecognized_tmp) == false)
 			return false;
-		unrecognized_union();
+		unrecognized_intersect();
 
-		if (previewOptions.Parse(argc, argv, &unrecognized) == false)
+		if (previewOptions.Parse(argc, argv, &unrecognized_tmp) == false)
 			return false;
-		unrecognized_union();
+		unrecognized_intersect();
 
-		if (videoOptions.Parse(argc, argv, &unrecognized) == false)
+		if (videoOptions.Parse(argc, argv, &unrecognized_tmp) == false)
 			return false;
-		unrecognized_union();
+		unrecognized_intersect();
 
 		// NOTE: This will override the *Options.output members :)
-		if (Options::Parse(argc, argv, &unrecognized) == false)
+		if (Options::Parse(argc, argv, &unrecognized_tmp) == false)
 			return false;
-		unrecognized_union();
+		unrecognized_intersect();
 
 		// Disable the preview window; it won't work.
 		nopreview = true;
@@ -117,6 +122,16 @@ struct MjpegOptions : public Options
 			throw boost::program_options::unknown_option(unrecognized[0]);
 		}
 
+		// Save the actual rotation/flip applied by the settings, as we need this later.
+		bool ok;
+		rot(transformFromRotation(rotation(), &ok));
+		assert(ok && "This should have failed already if it was going to.");
+		Transform flip_ = Transform::Identity;
+		if (vflip())
+			flip_ = flip_ * Transform::VFlip;
+		if (hflip())
+			flip_ = flip_ * Transform::HFlip;
+		flip(flip_);
 
 		return true;
 	}
@@ -143,8 +158,42 @@ struct MjpegOptions : public Options
 		std::cerr << "    status-output: " << status_output << std::endl;
 	}
 
-	StillOptions stillOptions{};
-	StillOptions previewOptions{};
-	VideoOptions videoOptions{};
+	StillOptions stillOptions {};
+	StillOptions previewOptions {};
+	VideoOptions videoOptions {};
 
+	/* We need to track the current rotation/flip independantly, but the
+	 * design of libcamera::Transform doesn't allow us to distinguish between
+	 * rot180 and (hflip * vflip), for example. So we use these wrappers :)
+	 * https://libcamera.org/api-html/namespacelibcamera.html#a371b6d17d531b85c035c4e889b116571
+	*/
+	libcamera::Transform rot() const { return rot_; }
+
+	void rot(libcamera::Transform value)
+	{
+		rot_ = value;
+		updateTransform();
+	};
+
+	libcamera::Transform flip() const { return flip_; }
+
+	void flip(libcamera::Transform value)
+	{
+		flip_ = value;
+		updateTransform();
+	}
+private:
+	libcamera::Transform rot_;
+	libcamera::Transform flip_;
+
+	void updateTransform()
+	{
+		using namespace libcamera;
+		// Recacluate the transform.
+		transform = Transform::Identity * flip_ * rot_;
+		// Apply the new transform to all our sub-9options.
+		stillOptions.transform = transform;
+		videoOptions.transform = transform;
+		previewOptions.transform = transform;
+	}
 };
