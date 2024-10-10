@@ -273,8 +273,8 @@ public:
 		still_active = true;
 	}
 
-	void ca_handle(std::vector<std::string> tokens, std::chrono::time_point<std::chrono::steady_clock>& start_time, int& duration_limit_seconds){
-		if (tokens.size() < 2 || tokens[1] != "1")
+	void ca_handle(std::vector<std::string> args, std::chrono::time_point<std::chrono::steady_clock>& start_time, int& duration_limit_seconds){
+		if (args.size() < 1 || args[0] != "1")
 			{ // ca 0, or some invalid command.
 				if (video_active)  // finish up with the current recording.
 					cleanup();
@@ -285,8 +285,8 @@ public:
 		{
 			video_active = true;
 			start_time = std::chrono::steady_clock::now();
-			if (tokens.size() >= 3) {
-				duration_limit_seconds = stoi(tokens[2]);
+			if (args.size() >= 2) {
+				duration_limit_seconds = stoi(args[1]);
 			} else {
 				// FIXME: Magic number :)
 				duration_limit_seconds = -1; // Indefinite
