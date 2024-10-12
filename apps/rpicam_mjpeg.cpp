@@ -196,23 +196,24 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 }
 
 // motion detect function
-static void motion_detect_save(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request) {
-    // Create an instance of MotionDetectStage
-    static MotionDetectStage motionDetectStage(&app);
-	static bool firstTime  = true;
-    
-    // Configure the motion detection stage
-	if (firstTime) {
+static void motion_detect_save(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request)
+{
+	// Create an instance of MotionDetectStage
+	static MotionDetectStage motionDetectStage(&app);
+	static bool firstTime = true;
+
+	// Configure the motion detection stage
+	if (firstTime)
+	{
 		boost::property_tree::ptree root;
 		boost::property_tree::read_json("assets/motion_detect.json", root);
 		motionDetectStage.Read(root);
 		motionDetectStage.Configure();
 		firstTime = false;
 	}
-	
+
 	motionDetectStage.Process(completed_request);
 }
-
 
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
@@ -328,9 +329,10 @@ static void event_loop(RPiCamMjpegApp &app)
 						   video_stream);
 				LOG(2, "Video recorded and saved");
 			}
-			
-			if (motion_detect){
-				// LOG(1, "motion detect start"); 
+
+			if (motion_detect)
+			{
+				// LOG(1, "motion detect start");
 				motion_detect_save(app, completed_request);
 			}
 		}
@@ -365,7 +367,6 @@ int main(int argc, char *argv[])
 			}
 
 			event_loop(app);
-
 		}
 		// Call cleanup after the event loop
 		app.cleanup();
