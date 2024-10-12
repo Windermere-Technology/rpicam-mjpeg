@@ -15,6 +15,14 @@
 #include <atomic>
 #include <system_error>
 
+//for mapping fifo
+#include <map>
+#include <vector>
+#include <functional>
+#include <iostream>
+#include <variant>
+//
+
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
@@ -50,7 +58,15 @@ void signal_handler(int signal) // signal handler
 class RPiCamMjpegApp : public RPiCamApp
 {
 public:
-	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {}
+	std::map<std::string, std::function<void(const std::vector<std::string>&, std::chrono::time_point<std::chrono::steady_clock>&, int&)>> commands;
+	RPiCamMjpegApp() : RPiCamApp(std::make_unique<MjpegOptions>()) {
+		commands["im"] = std::bind(&RPiCamMjpegApp::im_handle, this);
+		commands["ca"] = std::bind(&RPiCamMjpegApp::ca_handle, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
+		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
+		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["wb"] = std::bind(&RPiCamMjpegApp::wb_handle, this, std::placeholders::_1);
+	}
 
 	~RPiCamMjpegApp() { cleanup(); }
 
@@ -180,12 +196,16 @@ public:
 			if (fd < 0) throw std::system_error(errno, std::generic_category(), fifo_path);
 		}
 
-		// FIXME: This is inefficient, obviously...
+		// FIXED: buffered reader minimizes number of function calls to read
 		std::string command = "";
-		char c = '\0';
-		while (read(fd, &c, 1) > 0) {
-			if (c == '\n') break;
-			command += c;
+		char buffer[32];
+		int bytes_read;
+		while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
+			if (buffer[bytes_read - 1] == '\n') {
+				command.append(buffer, bytes_read - 1);
+				break;
+			}
+			command.append(buffer, bytes_read);
 		}
 
 		return command;
@@ -248,6 +268,32 @@ public:
 		Teardown();
 		Configure(options);
 		StartCamera();
+	}
+
+	void im_handle(){
+		still_active = true;
+	}
+
+	void ca_handle(std::vector<std::string> args, std::chrono::time_point<std::chrono::steady_clock>& start_time, int& duration_limit_seconds){
+		if (args.size() < 1 || args[0] != "1")
+			{ // ca 0, or some invalid command.
+				if (video_active)  // finish up with the current recording.
+					cleanup();
+				video_active = false;
+
+			}
+		else
+		{
+			video_active = true;
+			start_time = std::chrono::steady_clock::now();
+			if (args.size() >= 2) {
+				duration_limit_seconds = stoi(args[1]);
+			} else {
+				// FIXME: Magic number :)
+				duration_limit_seconds = -1; // Indefinite
+			}
+		}
+		
 	}
 
 	void pv_handle(std::vector<std::string> args)
@@ -382,7 +428,8 @@ std::vector<std::string> tokenizer(const std::string& str, const std::string& de
 
     return tokens;
 }
-
+	
+ 
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -414,54 +461,20 @@ static void event_loop(RPiCamMjpegApp &app)
 		std::string fifo_command = app.GetFifoCommand();
 		if (!fifo_command.empty())
 		{			
-			LOG(2, "Got command from FIFO: " + fifo_command);
+			LOG(1, "Got command from FIFO: " + fifo_command);
 
 			// Split the fifo_command by space
 			std::vector<std::string> tokens = tokenizer(fifo_command, " ");
 			std::vector<std::string> arguments = std::vector<std::string>(tokens.begin() + 1, tokens.end());
-
-			if (tokens[0] == "im")
+			// check for existing command
+			auto it = app.commands.find(tokens[0]);
+			if (it != app.commands.end())
 			{
-				app.still_active = true; // Take a picture :)
+				app.commands[tokens[0]](arguments, start_time, duration_limit_seconds); //Call associated command handler
 			}
-			else if (tokens[0] == "ro")
+			else
 			{
-				app.ro_handle(arguments);
-				continue;
-			}
-			else if (tokens[0] == "fl")
-			{
-				app.fl_handle(arguments);
-				continue;
-			}
-			else if (tokens[0] == "pv")
-			{
-				app.pv_handle(arguments);
-			}
-			else if (tokens[0] == "wb")
-			{
-				app.wb_handle(arguments);
-			}
-			else if (tokens[0] == "ca")
-			{
-				if (tokens.size() < 2 || tokens[1] != "1")
-				{ // ca 0, or some invalid command.
-					if (app.video_active)  // finish up with the current recording.
-						app.cleanup();
-					app.video_active = false;
-
-				}
-				else
-				{
-					app.video_active = true;
-					start_time = std::chrono::steady_clock::now();
-					if (tokens.size() >= 3) {
-						duration_limit_seconds = stoi(tokens[2]);
-					} else {
-						// FIXME: Magic number :)
-						duration_limit_seconds = -1; // Indefinite
-					}
-				}
+				std::cout << "Invalid command: " << tokens[0] << std::endl;
 			}
 		}
 
