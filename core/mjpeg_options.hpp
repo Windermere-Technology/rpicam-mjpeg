@@ -59,7 +59,7 @@ struct MjpegOptions : public Options
 				"Set the status output file name")
 			("media-path", value<std::string>(&media_path)->implicit_value("/var/www/media"),
 				"Set the media path for storing RPi_Cam_Web_Interface thumbnails")
-			("thumb-gen", value<std::string>(&thumb_gen)->implicit_value("vit"),
+			("thumb-gen", value<std::string>(&thumb_gen)->default_value("vit")->implicit_value("vit"),
 				"Enable thumbnail generation for v(ideo), i(mages) and t(imelapse). (vit = video, image, timelapse enabled)")
 			;
 		// clang-format on
