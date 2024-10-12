@@ -270,88 +270,85 @@ public:
 	}
 
 	void co_handle(std::vector<std::string> args)
-{
-    if (args.size() != 1)
-        throw std::runtime_error("expected exactly 1 argument to `co` command");
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `co` command");
 
-    float contrast = std::stof(args[0]);  // Use float for contrast
-    if (contrast < -100.0f || contrast > 100.0f)
-        throw std::runtime_error("contrast value out of range, must be between -100 and 100");
+		float contrast = std::stof(args[0]);  // Use float for contrast
 
-    auto options = GetOptions();
-    options->contrast = contrast;
-	LOG(1, "Contrast updated to: " << options->contrast);  // Log the updated contrast value
+		// keep contrast to the valid range [-100, 100]
+		contrast = std::max(-100.0f, std::min(contrast, 100.0f));
 
-    StopCamera();
-    Teardown();
-    Configure(options);
-    StartCamera();
-}
+		auto options = GetOptions();
+		options->contrast = contrast;
+		LOG(1, "Contrast updated to: " << options->contrast);  // Log the updated contrast value
 
-void br_handle(std::vector<std::string> args)
-{
-    if (args.size() != 1)
-        throw std::runtime_error("expected exactly 1 argument to `br` command");
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
 
-    float brightness = std::stof(args[0]);  // Use float for brightness
-    if (brightness < 0.0f || brightness > 100.0f)
-        throw std::runtime_error("brightness value out of range, must be between 0 and 100");
+	void br_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `br` command");
 
-    auto options = GetOptions();
-    options->brightness = brightness;
-	LOG(1, "Brightness updated to: " << options->brightness);  // Log the updated brightness value
+		float brightness = std::stof(args[0]);  // Use float for brightness
 
-    StopCamera();
-    Teardown();
-    Configure(options);
-    StartCamera();
-}
+		// keep brightness to the valid range [0, 100]
+		brightness = std::max(0.0f, std::min(brightness, 100.0f));
 
-void sa_handle(std::vector<std::string> args)
-{
-    if (args.size() != 1)
-        throw std::runtime_error("expected exactly 1 argument to `sa` command");
+		auto options = GetOptions();
+		options->brightness = brightness;
+		LOG(1, "Brightness updated to: " << options->brightness);  // Log the updated brightness value
 
-    float saturation = std::stof(args[0]);  // Use float for saturation
-    if (saturation < -100.0f || saturation > 100.0f)
-        throw std::runtime_error("saturation value out of range, must be between -100 and 100");
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
 
-    auto options = GetOptions();
-    options->saturation = saturation;
-	LOG(1, "Saturation updated to: " << options->saturation);  // Log the updated saturation value
+	void sa_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `sa` command");
 
-    StopCamera();
-    Teardown();
-    Configure(options);
-    StartCamera();
-}
+		float saturation = std::stof(args[0]);  // Use float for saturation
 
-void ss_handle(std::vector<std::string> args)
-{
-    if (args.size() != 1)
-        throw std::runtime_error("expected exactly 1 argument to `ss` command");
+		// keep saturation to the valid range [-100, 100]
+		saturation = std::max(-100.0f, std::min(saturation, 100.0f));
+		auto options = GetOptions();
+		options->saturation = saturation;
+		LOG(1, "Saturation updated to: " << options->saturation);  // Log the updated saturation value
 
-    int shutter_speed = std::stoi(args[0]);  
-    if (shutter_speed < 0)
-        throw std::runtime_error("shutter speed value must be positive");
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
 
-    auto options = GetOptions();
+	void ss_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `ss` command");
 
-    // Convert the shutter speed to a string and pass it to the set method
-    options->shutter.set(std::to_string(shutter_speed));
+		int shutter_speed = std::stoi(args[0]);  
+		if (shutter_speed < 0)
+			shutter_speed = 0;  // keep shutter speed to a positive value
 
-    LOG(1, "Shutter speed updated to: " << shutter_speed << " microseconds");
+		auto options = GetOptions();
 
-    StopCamera();
-    Teardown();
-    Configure(options);
-    StartCamera();
-}
+		// Convert the shutter speed to a string and pass it to the set method
+		options->shutter.set(std::to_string(shutter_speed));
 
+		LOG(1, "Shutter speed updated to: " << shutter_speed << " microseconds");
 
-
-
-
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
