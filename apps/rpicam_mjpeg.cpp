@@ -210,22 +210,7 @@ static void motion_detect_save(RPiCamMjpegApp &app, CompletedRequestPtr &complet
 		firstTime = false;
 	}
 	
-
 	motionDetectStage.Process(completed_request);
-
-	// bool detected = false;
-
-	// detected = motionDetectStage.Process(completed_request);
-		
-	// if (detected) 
-	// {
-	// 	LOG(1, "yes");
-	// } 
-	// else
-	// {
-	// 	LOG(1, "no");
-	// }
-	
 }
 
 
@@ -250,8 +235,6 @@ static void event_loop(RPiCamMjpegApp &app)
 	bool video_active = options->stream == "video";
 	bool multi_active = options->stream == "multi";
 
-	bool motion_active = options->stream == "motion";
-
 	bool motion_detect = options->stream == "motion_detect";
 
 	if (multi_active)
@@ -260,7 +243,7 @@ static void event_loop(RPiCamMjpegApp &app)
 		app.ConfigureMultiStream(0); // Flags can be passed as needed
 		app.StartCamera();
 	}
-	else if (video_active || motion_active || motion_detect)
+	else if (video_active || motion_detect)
 	{
 		app.ConfigureVideo();
 		app.StartCamera();
@@ -278,7 +261,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	for (;;)
 	{
 		// Check the elapsed time and limit to 5 seconds
-		if (video_active || multi_active || motion_active)
+		if (video_active || multi_active)
 		{
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
@@ -338,7 +321,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
 			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
 
-			if (video_active || multi_active || motion_active)
+			if (video_active || multi_active)
 			{
 				video_save(app, video_mem, video_info, completed_request->metadata, options->output, app.CameraModel(),
 						   options, libcamera::Size(video_info.width, video_info.height), completed_request,
@@ -372,7 +355,7 @@ int main(int argc, char *argv[])
 			if (options->stream.empty())
 				throw std::runtime_error("stream type required");
 			if (options->stream != "preview" && options->stream != "still" && options->stream != "video" &&
-				options->stream != "multi" && options->stream != "motion" && options->stream != "motion_detect")
+				options->stream != "multi" && options->stream != "motion_detect")
 			{
 				throw std::runtime_error("stream type must be one of: preview, still, video, motion_detect");
 			}
@@ -383,22 +366,6 @@ int main(int argc, char *argv[])
 
 			event_loop(app);
 
-			if (options->stream == "motion")
-			{
-				// re-encode the video for mv exportation
-				std::string ffmpeg_encode =
-					"ffmpeg -i " + options->output +
-					" -c:v libx264 -flags2 +export_mvs -preset fast -crf 24 /tmp/temp_with_mvs.mp4 -y";
-				// overlay the motion vectors on top
-				std::string ffmpeg_extract_cmd =
-					"ffmpeg -flags2 +export_mvs -i /tmp/temp_with_mvs.mp4 -vf codecview=mv=pf+bf+bb -c:v libx264 -crf 0 /tmp/mv.mp4 -y";
-
-				system(ffmpeg_encode.c_str());
-				system(ffmpeg_extract_cmd.c_str());
-
-				remove("/tmp/temp_with_mvs.mp4"); // remove tmp files
-				LOG(2, "motion vector saved to /tmp/mv.mp4");
-			}
 		}
 		// Call cleanup after the event loop
 		app.cleanup();

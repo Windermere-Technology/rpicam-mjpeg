@@ -177,10 +177,8 @@ bool MotionDetectStage::Process(CompletedRequestPtr &completed_request)
 			int old_value = *old_value_ptr;
 			*(old_value_ptr++) = new_value;
 			regions += std::abs(new_value - old_value) > config_.difference_m * old_value + config_.difference_c;
-			// std::cout << "New value: " << new_value << ", old_value:" << old_value << std::endl;
 			motion_detected = regions >= region_threshold_;
 		}
-		// std::cout << "going through pixels" << std::endl;
 	}
 
 	if (config_.verbose && motion_detected != motion_detected_)
