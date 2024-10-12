@@ -330,8 +330,10 @@ int Options::AwbLookup(std::string awb)
 			{ "daylight", libcamera::controls::AwbDaylight },
 			{ "cloudy", libcamera::controls::AwbCloudy },
 			{ "custom", libcamera::controls::AwbCustom },
-			// TODO: How should we support "off", "shade", "flash" AWB modes?
-			{ "sun", libcamera::controls::AwbDaylight } };
+			{ "sun", libcamera::controls::AwbDaylight },
+			// TODO: Handle "shade" & "flash" AWB modes (available in MMAL)?
+			// TODO: This doesn't feel great, but also there's no "off" in the AwbModeEnum
+			{ "off", -1 } };
 	if (awb_table.count(awb) == 0)
 		throw std::runtime_error("Invalid AWB mode: " + awb);
 	return awb_table[awb];

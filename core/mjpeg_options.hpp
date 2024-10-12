@@ -194,6 +194,7 @@ struct MjpegOptions : public Options
 		videoOptions.awb = new_awb;
 		videoOptions.awb_index = new_awb_index;
 	}
+
 private:
 	libcamera::Transform rot_;
 	libcamera::Transform flip_;
