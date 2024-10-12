@@ -14,6 +14,9 @@
 #include <csignal> 
 #include <atomic>
 #include <system_error>
+#include <regex>
+#include <filesystem>
+#include <fstream>
 
 //for mapping fifo
 #include <map>
@@ -67,7 +70,7 @@ public:
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
 	}
 
-	~RPiCamMjpegApp() { cleanup(); }
+	~RPiCamMjpegApp() { CleanupVideoEncoder(); }
 
 	MjpegOptions *GetOptions() const { return static_cast<MjpegOptions *>(options_.get()); }
 
@@ -82,6 +85,9 @@ public:
 	bool multi_active;
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
 	std::optional<std::string> error = std::nullopt;
+
+	int image_count = 0; // still and timelapse
+	int video_count = 0;
 
 	// Get the application "status": https://github.com/roberttidey/userland/blob/e2b8cd0c80902d6aeb4f157c3cf1b1f61446b061/host_applications/linux/apps/raspicam/README_RaspiMJPEG.md
 	std::string status()
@@ -128,7 +134,7 @@ public:
 	}
 
 	// Function to initialize the encoder and file output
-	void initialize_encoder(VideoOptions &videoOptions, const StreamInfo &info)
+	void InitializeVideoEncoder(VideoOptions &videoOptions, const StreamInfo &info)
 	{
 		if (!h264Encoder)
 		{
@@ -161,7 +167,7 @@ public:
 			});
 	}
 
-	void cleanup()
+	void CleanupVideoEncoder()
 	{
 		if (h264Encoder)
 		{
@@ -173,6 +179,8 @@ public:
 		{
 			LOG(1, "Cleaning up file output...");
 			h264FileOutput.reset(); // Free the file output resources
+			thumbnail_save(GetOptions()->videoOptions.output, 'v');
+			video_count++;
 		}
 	}
 
@@ -277,7 +285,7 @@ public:
 		if (args.size() < 1 || args[0] != "1")
 			{ // ca 0, or some invalid command.
 				if (video_active)  // finish up with the current recording.
-					cleanup();
+					CleanupVideoEncoder();
 				video_active = false;
 
 			}
@@ -360,6 +368,7 @@ public:
 
 		jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
 		LOG(1, "Saved still capture: " + output_filename);
+		image_count++;
 		thumbnail_save(output_filename, 'i');
 	};
 
@@ -371,8 +380,8 @@ public:
 		VideoOptions &options = GetOptions()->videoOptions;
 		std::string const filename = options.output;
 
-		// Use the app instance to call initialize_encoder
-		initialize_encoder(options, info);
+		// Use the app instance to call InitializeVideoEncoder
+		InitializeVideoEncoder(options, info);
 
 		// Check if the encoder and file output were successfully initialized
 		if (!h264Encoder)
@@ -403,8 +412,49 @@ public:
 		// Encode the buffer using the H.264 encoder
 		//LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
 		h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
+	}
 
-		thumbnail_save(filename, 'v');
+	void set_counts()
+	{
+		const std::string thumbnail_suffix = ".th.jpg";
+		MjpegOptions *options = GetOptions();
+
+		auto get_highest_by_type = [&thumbnail_suffix](std::string filename, std::string types) {
+			auto base = filename.substr(0, filename.rfind("/"));
+
+			std::vector<std::string> filenames;
+			for (auto const& dir_entry : std::filesystem::directory_iterator(base)) {
+				if (!dir_entry.is_regular_file()) continue;
+				filenames.push_back(dir_entry.path());
+			}
+
+			// Extract max <count> from Vec of "<name>.<type><count>.th.jpg"
+			int max_count = 0;
+			std::regex thumbnail_regex(".*.(t|i|v)([0-9]+).th.jpg");
+			std::smatch thumbnail_match;
+			for (auto &filename : filenames) {
+				// File didn't match thumbnail format
+				if (!std::regex_search(filename, thumbnail_match, thumbnail_regex))
+					continue;
+				std::string type = thumbnail_match[1];
+
+				// File didn't match required types
+				if (types.find(type) == std::string::npos)
+					continue;
+
+				int count = std::stoi(thumbnail_match[2]);
+				if (count > max_count) max_count = count;
+			}
+			return max_count;
+		};
+
+		if (!options->stillOptions.output.empty()) {
+			image_count = get_highest_by_type(options->stillOptions.output, "it") + 1;
+		}
+
+		if (!options->videoOptions.output.empty()) {
+			video_count = get_highest_by_type(options->videoOptions.output, "v") + 1;
+		}
 	}
 
 	void thumbnail_save(std::string filename, char type)
@@ -424,8 +474,7 @@ public:
 		if (filename.rfind(options->media_path, 0) == std::string::npos)
 			return;
 
-		// TODO: Track the total number of images by type, and include it here.
-		int count = 1;
+		int count = type == 'v' ? video_count : image_count;
 		// TODO: We are supposed to replace subdirectories relative to media_path with options->subdir_char.
 		// - ie. /var/www/media/my/sub/directory/img.jpg should generate thumbnail /var/www/media/my@sub@directory@img.jpg.i1.th.jpg
 
@@ -488,6 +537,9 @@ static void event_loop(RPiCamMjpegApp &app)
 	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
+	app.set_counts();
+	LOG(2, "image_count: " << app.image_count << ", video_count: " << app.video_count);
+
 	while (app.video_active || app.preview_active || app.still_active || app.fifo_active())
 	{
 		// Check if there are any commands over the FIFO.
@@ -522,7 +574,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (stopRecording)
 			{
 				LOG(1, "SIGINT caught. Stopping recording.");
-				app.cleanup();
+				app.CleanupVideoEncoder();
 				app.video_active = false;  // Ensure video_active is set to false
 				break; 
 			}
@@ -530,7 +582,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (elapsed_time >= duration_limit_seconds)
 			{
 				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
-				app.cleanup();
+				app.CleanupVideoEncoder();
 				app.video_active = false;
 			}
 		}
