@@ -313,83 +313,97 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+
+	void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
+					libcamera::ControlList const &metadata)
+	{
+		StillOptions *options = &GetOptions()->previewOptions;
+		std::string const filename = options->output;
+		std::string const &cam_model = CameraModel();
+
+		// If opts.width == 0, we should use "the default"
+		options->width = (options->width >= 128 && options->width <= 1024) ? options->width : 512;
+
+		// Copied from RaspiMJPEG ;)
+		unsigned int height = (unsigned long int)options->width * info.height / info.width;
+		height -= height % 16;
+		options->height = height;
+
+		jpeg_save(mem, info, metadata, filename, cam_model, options, options->width, options->height);
+	}
+
+	void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
+						libcamera::ControlList const &metadata, libcamera::Size outputSize)
+	{
+		StillOptions const *options = &GetOptions()->stillOptions;
+		std::string const filename = options->output;
+		std::string const &cam_model = CameraModel();
+
+		// Add the datetime to the filename.
+		std::string output_filename;
+		{
+			// The part before the extension (if one exists)
+			size_t period_index = filename.rfind(".");
+			if (period_index == std::string::npos)
+				period_index = filename.length();
+			std::string name = filename.substr(0, period_index);
+			std::time_t now = std::time(nullptr);
+			// The date/timestamp
+			std::stringstream buffer;
+			buffer << std::put_time(std::localtime(&now), "%Y%m%d%H%M%S"); // Use &now instead of &t
+			std::string timestamp = buffer.str(); // Get the string from the buffer
+
+			// Extension
+			std::string extension = filename.substr(period_index, filename.length());
+			output_filename = name + timestamp + extension;
+		}
+
+		jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
+		LOG(1, "Saved still capture: " + output_filename);
+	};
+
+	// video_save function using app to manage encoder and file output
+	void video_save(const std::vector<libcamera::Span<uint8_t>> &mem, const StreamInfo &info,
+				const libcamera::ControlList &metadata, const CompletedRequestPtr &completed_request,
+				Stream *stream)
+	{
+		VideoOptions &options = GetOptions()->videoOptions;
+		std::string const filename = options.output;
+
+		// Use the app instance to call initialize_encoder
+		initialize_encoder(options, info);
+
+		// Check if the encoder and file output were successfully initialized
+		if (!h264Encoder)
+		{
+			LOG_ERROR("Failed to initialize encoder.");
+			return;
+		}
+
+		if (!h264FileOutput)
+		{
+			LOG_ERROR("Failed to initialize file output.");
+			return;
+		}
+
+		// Get buffer to process
+		auto buffer = completed_request->buffers[stream];
+		int fd = buffer->planes()[0].fd.get(); // File descriptor of buffer
+		auto ts = metadata.get(libcamera::controls::SensorTimestamp);
+		int64_t timestamp_us = ts ? (*ts / 1000) : (buffer->metadata().timestamp / 1000);
+
+		// Ensure buffer is valid before encoding
+		if (mem.empty() || mem[0].size() == 0)
+		{
+			LOG_ERROR("Buffer is empty, cannot proceed.");
+			return;
+		}
+
+		// Encode the buffer using the H.264 encoder
+		//LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
+		h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
+	}
 };
-
-static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
-						 libcamera::ControlList const &metadata, std::string const &filename,
-						 std::string const &cam_model, StillOptions const *options)
-{
-	jpeg_save(mem, info, metadata, filename, cam_model, options, options->width, options->height);
-}
-
-static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
-					   libcamera::ControlList const &metadata, std::string const &filename,
-					   std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize)
-{
-	// Add the datetime to the filename.
-	std::string output_filename;
-	{
-		// The part before the extension (if one exists)
-		size_t period_index = filename.rfind(".");
-		if (period_index == std::string::npos)
-			period_index = filename.length();
-		std::string name = filename.substr(0, period_index);
-		std::time_t now = std::time(nullptr);
-		// The date/timestamp
-		std::stringstream buffer;
-        buffer << std::put_time(std::localtime(&now), "%Y%m%d%H%M%S"); // Use &now instead of &t
-        std::string timestamp = buffer.str(); // Get the string from the buffer
-
-		// Extension
-        std::string extension = filename.substr(period_index, filename.length());
-        output_filename = name + timestamp + extension;
-		
-	}
-
-	jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
-	LOG(1, "Saved still capture: " + output_filename);
-};
-
-// video_save function using app to manage encoder and file output
-static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<uint8_t>> &mem, const StreamInfo &info,
-					   const libcamera::ControlList &metadata, const std::string &filename,
-					   const std::string &cam_model, VideoOptions &options,
-					   const CompletedRequestPtr &completed_request, Stream *stream)
-{   
-
-	// Use the app instance to call initialize_encoder
-	app.initialize_encoder(options, info);
-
-	// Check if the encoder and file output were successfully initialized
-	if (!app.h264Encoder)
-	{
-		LOG_ERROR("Failed to initialize encoder.");
-		return;
-	}
-
-	if (!app.h264FileOutput)
-	{
-		LOG_ERROR("Failed to initialize file output.");
-		return;
-	}
-
-	// Get buffer to process
-	auto buffer = completed_request->buffers[stream];
-	int fd = buffer->planes()[0].fd.get(); // File descriptor of buffer
-	auto ts = metadata.get(libcamera::controls::SensorTimestamp);
-	int64_t timestamp_us = ts ? (*ts / 1000) : (buffer->metadata().timestamp / 1000);
-
-	// Ensure buffer is valid before encoding
-	if (mem.empty() || mem[0].size() == 0)
-	{
-		LOG_ERROR("Buffer is empty, cannot proceed.");
-		return;
-	}
-
-	// Encode the buffer using the H.264 encoder
-	//LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
-	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
-}
 
 // Function to tokenize the FIFO command
 std::vector<std::string> tokenizer(const std::string& str, const std::string& delimiter) {
@@ -509,26 +523,16 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (app.still_active)
 			{
 				// Save still image instead of preview when still_active is set
-				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
-						   app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
-				
+				app.still_save(viewfinder_mem, viewfinder_info, completed_request->metadata,
+                            libcamera::Size(3200, 2400));
+
 				LOG(2, "Still image saved");
 				app.still_active = false;
 			}
 			else if (app.preview_active || app.multi_active)
 			{
 				// Save preview if not in still mode
-				StillOptions opts = options->previewOptions;
-				// If opts.width == 0, we should use "the default"
-				opts.width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
-
-				// Copied from RaspiMJPEG ;)
-				unsigned int height = (unsigned long int) opts.width*viewfinder_info.height/viewfinder_info.width;
-				height -= height%16;
-				opts.height = height;
-
-				preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, opts.output,
-							 app.CameraModel(), &opts);
+				app.preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata);
 				LOG(2, "Viewfinder (Preview) image saved");
 			}
 		}
@@ -543,8 +547,7 @@ static void event_loop(RPiCamMjpegApp &app)
 
 			if (app.video_active)
 			{
-				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
-						   app.CameraModel(), options->videoOptions, completed_request, video_stream);
+				app.video_save(video_mem, video_info, completed_request->metadata, completed_request, video_stream);
 				LOG(2, "Video recorded and saved");
 			}
 		}
