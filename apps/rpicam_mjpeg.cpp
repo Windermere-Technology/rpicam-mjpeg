@@ -360,6 +360,7 @@ public:
 
 		jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
 		LOG(1, "Saved still capture: " + output_filename);
+		thumbnail_save(output_filename, 'i');
 	};
 
 	// video_save function using app to manage encoder and file output
@@ -402,6 +403,43 @@ public:
 		// Encode the buffer using the H.264 encoder
 		//LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
 		h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
+
+		thumbnail_save(filename, 'v');
+	}
+
+	void thumbnail_save(std::string filename, char type)
+	{
+		assert((type == 'v' || type == 'i' || type == 't') && "Type must be one of v, i, t.");
+
+		MjpegOptions const *options = GetOptions();
+		if (options->media_path.empty()) return;
+		if (options->thumb_gen.empty()) return;
+		if (options->previewOptions.output.empty()) return;
+
+		// Thumbnail generation for this type is disabled.
+		if (options->thumb_gen.find(type) == std::string::npos)
+			return;
+
+		// Only generate thumbnails for files saved at the media path.
+		if (filename.rfind(options->media_path, 0) == std::string::npos)
+			return;
+
+		// TODO: Track the total number of images by type, and include it here.
+		int count = 1;
+		// TODO: We are supposed to replace subdirectories relative to media_path with options->subdir_char.
+		// - ie. /var/www/media/my/sub/directory/img.jpg should generate thumbnail /var/www/media/my@sub@directory@img.jpg.i1.th.jpg
+
+		std::stringstream buffer;
+		buffer << filename << "." << type << count << ".th.jpg";
+
+		// Use the current preview as the thumbnail.
+		std::string preview_filename = options->previewOptions.output;
+		std::string thumbnail_filename = buffer.str();
+		std::ifstream preview(preview_filename, std::ios::binary);
+		std::ofstream thumbnail(thumbnail_filename, std::ios::binary);
+		thumbnail << preview.rdbuf();
+
+		LOG(2, "Saved thumbnail to " << thumbnail_filename);
 	}
 };
 
