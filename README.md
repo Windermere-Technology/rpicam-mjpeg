@@ -10,6 +10,7 @@ Build
 ### Step 1: Building libcamera
 * Build and install the raspberrypi/libcamera library; see documentation [here.](https://www.raspberrypi.com/documentation/computers/camera_software.html#building-libcamera)
   - **NOTE:** Do not use the `libcamera` packages from the official repositories, these are outdated.
+
 ### Step 2: Building rpicam-apps
 1. First fetch the necessary dependencies for rpicam-apps.
 ```bash
@@ -54,27 +55,26 @@ At this stage, the subcommands are not configured to run concurrently:
 ### 1. Preview Stream
 
 ```bash
-./build/apps/rpicam-mjpeg --stream preview --output /tmp/cam.jpg
+./build/apps/rpicam-mjpeg --preview-output /tmp/cam.jpg --preview-width 640 --preview-height 480
 ```
-* `./build/apps/rpicam-mjpeg --stream preview --output /tmp/cam.jpg` will behave in a way similar to the RaspiMJPEG preview stream.
+* `./build/apps/rpicam-mjpeg --preview-output /tmp/cam.jpg` will behave in a way similar to the RaspiMJPEG preview stream.
+  - `open /tmp/cam.jpg` while running should resemble a video stream if image viewer supports live-reloading (such as default RPi image viewer)
   - Terminate with Ctrl+C
-  - `open /tmp/cam.jpg` should resemble a video stream if image viewer supports live-reloading (such as default RPi image viewer)
     
 ### 2. Still Image Stream
 
 ```bash
-./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg
+./build/apps/rpicam-mjpeg --still-output /tmp/cam.jpg
 ```
-* `./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg` will save a timestamped JPEG every 3 seconds.
-  - Terminate with Ctrl+C.
+* `./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg` will save a timestamped JPEG.
   - Output files are saved in the `/tmp` directory.
     
 ### 3. Video Stream
 
 ```bash
-./build/apps/rpicam-mjpeg --stream video --output /tmp/vid.mp4
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4
 ```
-* `./build/apps/rpicam-mjpeg --stream video --output /tmp/vid.mp4` will save a 5s MP4 video.
+* `./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4` will save a 5s MP4 video.
   - Automatically terminate after finishing the 5-second recording.
   - Alternatively, you can manually terminate the process by closing the popup window.
   - **NOTE:** Terminating with Ctrl+C will result in a corrupt video.
@@ -82,9 +82,65 @@ At this stage, the subcommands are not configured to run concurrently:
 
 ### 4. Multi Stream
 ```bash
-rpicam-mjpeg --stream multi --output /tmp/vid.mp4
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --preview-output /tmp/cam.jpg --preview-width 640 --preview-height 480
 ```
-* `rpicam-mjpeg --stream video --output /tmp/vid.mp4` will save a 5s MP4 video `vid.mp4`, and `vid.mp4_preview.jpg`
+
+This will save a 5s MP4 video `vid.mp4`, and while the video is being captured, also output a preview stream at `/tmp/cam.jpg`
+
+---
+
+FIFO
+-----
+
+Currently, FIFO can take 3 different commands:
+
+Firstly, create FIFO by:
+```bash
+mkfifo /tmp/FIFO
+```
+
+### 1: Still Image Capture
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --still-output /tmp/cam.jpg --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'im' > /tmp/FIFO
+```
+Run this command to take a still picture :wink:
+
+
+
+### 2: Video Recording
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO --nopreview
+```
+
+On terminal b:
+```bash
+echo 'ca 1 10' > /tmp/FIFO
+```
+To record video for 10 seconds;
+Or
+```bash
+echo 'ca 0' > /tmp/FIFO
+```
+To stop recording. (TBD)
+
+### 3: Preview
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --preview-output /tmp/cam.jpg --fifo /tmp/FIFO --nopreview
+```
+
+On terminal b:
+```bash
+cho 'pv 1000 500' > /tmp/FIFO
+```
+To set the size of preview window as 1000 x 500.
 
 ---
 
@@ -112,6 +168,11 @@ sudo meson install -C build
 
 This will ensure the previous build is removed, a fresh build is created, and the updated binaries are installed.
 
+## Multistream Stat
+**TODO:**
+- [x] Make use of 2 YUV streams and a RAW stream concurrently.
+- [ ] Modification to support MotionOptions
+- [ ] Assign RAW stream to motion
 
 License
 -------
@@ -122,3 +183,4 @@ Status
 ------
 
 [![ToT libcamera build/run test](https://github.com/raspberrypi/rpicam-apps/actions/workflows/rpicam-test.yml/badge.svg)](https://github.com/raspberrypi/rpicam-apps/actions/workflows/rpicam-test.yml)
+

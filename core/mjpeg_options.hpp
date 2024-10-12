@@ -11,46 +11,189 @@
 
 #include "options.hpp"
 #include "still_options.hpp"
+#include "video_options.hpp"
 
-struct MjpegOptions : public StillOptions
+struct MjpegOptions : public Options
 {
-	MjpegOptions() : StillOptions()
+	MjpegOptions() : Options()
 	{
 		using namespace boost::program_options;
+
+		// Yoink'd: https://stackoverflow.com/a/28667150
+		auto in = [](int min, int max, std::string opt_name) {
+			return [opt_name, min, max](int value) {
+				if (value < min || value > max) {
+					throw validation_error(
+						validation_error::invalid_option_value,
+						opt_name,
+						std::to_string(value)
+					);
+				}
+			};
+		};
+
 		// clang-format off
 		options_.add_options()
-			("stream", value<std::string>(&stream), "Select the output stream type (preview, still or video)")
+			("preview-output", value<std::string>(&previewOptions.output),
+				"Set the preview output file name")
+			("preview-width", value<unsigned int>(&previewOptions.width)->default_value(512)
+				->notifier(in(128, 1024, "preview-width")),
+				"Set the output preview width (min = 128, max = 1024)")
+			("video-output", value<std::string>(&videoOptions.output),
+				"Set the video output file name")
+			("video-width", value<unsigned int>(&videoOptions.width)->default_value(0),
+				"Set the output video width (0 = use default value)")
+			("video-height", value<unsigned int>(&videoOptions.height)->default_value(0),
+				"Set the output video height (0 = use default value)")
+			("still-output", value<std::string>(&stillOptions.output),
+				"Set the still output file name")
+			("still-width", value<unsigned int>(&stillOptions.width)->default_value(0),
+				"Set the output still width (0 = use default value)")
+			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
+				"Set the output still height (0 = use default value)")
+			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
+			// Break nopreview flag; the preview will not work in rpicam-mjpeg!
+			("nopreview,n", value<bool>(&nopreview)->default_value(true)->implicit_value(true),
+			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
+			("status-output", value<std::string>(&status_output)->default_value("/dev/shm/mjpeg/status_mjpeg.txt"),
+				"Set the status output file name")
 			;
 		// clang-format on
 	}
 
-	std::string stream;
+	virtual bool Parse(int argc, char *argv[]) override
+	{
+		using namespace libcamera;
+
+		// We need to intersect all the unrecognized options, since it is only those that
+		// *nothing* recognized that are actually unrecognized by our program.
+		std::vector<std::string> unrecognized_tmp, unrecognized;
+		auto unrecognized_intersect = [&unrecognized_tmp, &unrecognized]()
+		{
+			std::vector<std::string> collector;
+			std::sort(unrecognized_tmp.begin(), unrecognized_tmp.end());
+			if (unrecognized.size() == 0)
+			{
+				unrecognized = unrecognized_tmp;
+				return;
+			}
+
+			std::set_intersection(unrecognized_tmp.cbegin(), unrecognized_tmp.cend(), unrecognized.cbegin(),
+								  unrecognized.cend(), std::back_inserter(collector));
+
+			unrecognized = collector;
+		};
+
+		if (stillOptions.Parse(argc, argv, &unrecognized_tmp) == false)
+			return false;
+		unrecognized_intersect();
+
+		if (previewOptions.Parse(argc, argv, &unrecognized_tmp) == false)
+			return false;
+		unrecognized_intersect();
+
+		if (videoOptions.Parse(argc, argv, &unrecognized_tmp) == false)
+			return false;
+		unrecognized_intersect();
+
+		// NOTE: This will override the *Options.output members :)
+		if (Options::Parse(argc, argv, &unrecognized_tmp) == false)
+			return false;
+		unrecognized_intersect();
+
+		// Disable the preview window; it won't work.
+		nopreview = true;
+
+		// Check if --output is used and throw an error if it's provided
+		if (!output.empty())
+		{
+			throw std::runtime_error("The --output option is deprecated. Use --video-output, --preview-output, or --still-output instead.");
+		}
+
+		// Ensure at least one of --still-output, --video-output, or --preview-output is specified
+		if (stillOptions.output.empty() && previewOptions.output.empty() && videoOptions.output.empty())
+		{
+			throw std::runtime_error("At least one of --still-output, --video-output, or --preview-output should be provided.");
+		}
+
+		// Error if any unrecognised flags were provided
+		if (unrecognized.size())
+		{
+			throw boost::program_options::unknown_option(unrecognized[0]);
+		}
+
+		// Save the actual rotation/flip applied by the settings, as we need this later.
+		bool ok;
+		rot(transformFromRotation(rotation(), &ok));
+		assert(ok && "This should have failed already if it was going to.");
+		Transform flip_ = Transform::Identity;
+		if (vflip())
+			flip_ = flip_ * Transform::VFlip;
+		if (hflip())
+			flip_ = flip_ * Transform::HFlip;
+		flip(flip_);
+
+		return true;
+	}
+
+	virtual void SetApp(RPiCamApp *app) override
+	{
+		// I hope I'm not breaking any assumptions by doing this...
+		stillOptions.SetApp(app);
+		previewOptions.SetApp(app);
+		videoOptions.SetApp(app);
+		Options::SetApp(app);
+	}
+
+	std::string fifo;
+	std::string status_output;
 
 	virtual void Print() const override
 	{
 		Options::Print();
-		std::cerr << "    encoding: " << encoding << std::endl;
-		std::cerr << "    quality: " << quality << std::endl;
-		std::cerr << "    raw: " << raw << std::endl;
-		std::cerr << "    restart: " << restart << std::endl;
-		std::cerr << "    timelapse: " << timelapse.get() << "ms" << std::endl;
-		std::cerr << "    framestart: " << framestart << std::endl;
-		std::cerr << "    datetime: " << datetime << std::endl;
-		std::cerr << "    timestamp: " << timestamp << std::endl;
-		std::cerr << "    keypress: " << keypress << std::endl;
-		std::cerr << "    signal: " << signal << std::endl;
-		std::cerr << "    thumbnail width: " << thumb_width << std::endl;
-		std::cerr << "    thumbnail height: " << thumb_height << std::endl;
-		std::cerr << "    thumbnail quality: " << thumb_quality << std::endl;
-		std::cerr << "    latest: " << latest << std::endl;
-		std::cerr << "    immediate " << immediate << std::endl;
-		std::cerr << "    AF on capture: " << af_on_capture << std::endl;
-		std::cerr << "    Zero shutter lag: " << zsl << std::endl;
-		std::cerr << "    Stream: " << stream << std::endl;
-		for (auto &s : exif)
-			std::cerr << "    EXIF: " << s << std::endl;
+		stillOptions.Print();
+		previewOptions.Print();
+		videoOptions.Print();
+		std::cerr << "    fifo: " << fifo << std::endl;
+		std::cerr << "    status-output: " << status_output << std::endl;
 	}
 
+	StillOptions stillOptions {};
+	StillOptions previewOptions {};
+	VideoOptions videoOptions {};
+
+	/* We need to track the current rotation/flip independantly, but the
+	 * design of libcamera::Transform doesn't allow us to distinguish between
+	 * rot180 and (hflip * vflip), for example. So we use these wrappers :)
+	 * https://libcamera.org/api-html/namespacelibcamera.html#a371b6d17d531b85c035c4e889b116571
+	*/
+	libcamera::Transform rot() const { return rot_; }
+
+	void rot(libcamera::Transform value)
+	{
+		rot_ = value;
+		updateTransform();
+	};
+
+	libcamera::Transform flip() const { return flip_; }
+
+	void flip(libcamera::Transform value)
+	{
+		flip_ = value;
+		updateTransform();
+	}
 private:
-	std::string timelapse_;
+	libcamera::Transform rot_;
+	libcamera::Transform flip_;
+
+	void updateTransform()
+	{
+		using namespace libcamera;
+		// Recacluate the transform.
+		transform = Transform::Identity * flip_ * rot_;
+		// Apply the new transform to all our sub-9options.
+		stillOptions.transform = transform;
+		videoOptions.transform = transform;
+		previewOptions.transform = transform;
+	}
 };

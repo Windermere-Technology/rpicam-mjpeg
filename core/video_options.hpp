@@ -194,7 +194,12 @@ struct VideoOptions : public Options
 
 	virtual bool Parse(int argc, char *argv[]) override
 	{
-		if (Options::Parse(argc, argv) == false)
+		return VideoOptions::Parse(argc, argv, nullptr);
+	}
+
+	virtual bool Parse(int argc, char *argv[], std::vector<std::string> *unrecognized) override
+	{
+		if (Options::Parse(argc, argv, unrecognized) == false)
 			return false;
 
 		bitrate.set(bitrate_);

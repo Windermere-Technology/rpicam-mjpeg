@@ -12,7 +12,7 @@ project('rpicam-apps', 'c', 'cpp',
 
 meson.add_dist_script('utils' / 'gen-dist.sh')
 
-cpp_arguments = ['-pedantic', '-Wno-unused-parameter', '-faligned-new']
+cpp_arguments = ['-pedantic', '-Wno-unused-parameter', '-faligned-new', '-ggdb']
 
 # Needed for file sizes > 32-bits.
 cpp_arguments += '-D_FILE_OFFSET_BITS=64'

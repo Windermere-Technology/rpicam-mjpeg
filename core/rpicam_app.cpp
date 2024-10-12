@@ -10,6 +10,9 @@
 #include "core/frame_info.hpp"
 #include "core/rpicam_app.hpp"
 #include "core/options.hpp"
+#include "core/mjpeg_options.hpp"
+#include "core/still_options.hpp"
+#include "core/video_options.hpp"
 
 #include <cmath>
 #include <fcntl.h>
@@ -532,6 +535,9 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 {
 	LOG(2, "Configuring video...");
 
+	// Cast the base options_ to MjpegOptions to access videoOptions
+    MjpegOptions *mjpegOptions = static_cast<MjpegOptions *>(options_.get());
+
 	bool have_lores_stream = options_->lores_width && options_->lores_height;
 	StreamRoles stream_roles = { StreamRole::VideoRecording };
 	int lores_index = 1;
@@ -549,10 +555,19 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 	cfg.bufferCount = 6; // 6 buffers is better than 4
 	if (options_->buffer_count > 0)
 		cfg.bufferCount = options_->buffer_count;
-	if (options_->width)
-		cfg.size.width = options_->width;
-	if (options_->height)
-		cfg.size.height = options_->height;
+	// added video specific width and height 
+	 if (mjpegOptions->videoOptions.width) {
+        cfg.size.width = mjpegOptions->videoOptions.width;
+    } else if (options_->width) {
+        cfg.size.width = options_->width;
+    }
+
+    if (mjpegOptions->videoOptions.height) {
+        cfg.size.height = mjpegOptions->videoOptions.height;
+    } else if (options_->height) {
+        cfg.size.height = options_->height;
+    }
+
 	if (flags & FLAG_VIDEO_JPEG_COLOURSPACE)
 		cfg.colorSpace = libcamera::ColorSpace::Sycc;
 	else if (cfg.size.width >= 1280 || cfg.size.height >= 720)
@@ -603,45 +618,49 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 	LOG(2, "Video setup complete");
 }
 
-void RPiCamApp::ConfigureMultiStream(unsigned int flags)
+void RPiCamApp::ConfigureMultiStream(StillOptions& stillOptions,
+                                     VideoOptions& videoOptions,
+                                     StillOptions& previewOptions,
+                                     unsigned int flags)
 {
     LOG(2, "=== Configuring multi-stream... ===");
 
+    //Stream roles
     StreamRoles stream_roles = { StreamRole::Viewfinder, StreamRole::VideoRecording };
-
-    // Add Raw stream if the no_raw option is not set
-    if (!options_->no_raw)
+    if (stillOptions.raw)
         stream_roles.push_back(StreamRole::Raw);
 
-    // Generate configuration for the selected stream roles
-    configuration_ = camera_->generateConfiguration(stream_roles);
+    if (!configuration_)
+		configuration_ = camera_->generateConfiguration(stream_roles);
+
     if (!configuration_)
         throw std::runtime_error("failed to generate multi-stream configuration");
 
-    // Configure the Viewfinder
+    // Configure the Preview Stream
     StreamConfiguration &viewfinder_cfg = configuration_->at(0);
     viewfinder_cfg.pixelFormat = libcamera::formats::YUV420;
-    if (options_->width)
-        viewfinder_cfg.size.width = options_->width;
-    if (options_->height)
-        viewfinder_cfg.size.height = options_->height;
-    if (options_->buffer_count > 0)
-        viewfinder_cfg.bufferCount = options_->buffer_count;
+    if (previewOptions.width)
+        viewfinder_cfg.size.width = previewOptions.width;
+    if (previewOptions.height)
+        viewfinder_cfg.size.height = previewOptions.height;
+    if (previewOptions.buffer_count > 0)
+        viewfinder_cfg.bufferCount = previewOptions.buffer_count;
     else
         viewfinder_cfg.bufferCount = 6;  // Default buffer count
 
     post_processor_.AdjustConfig("viewfinder", &viewfinder_cfg);
 
-    // Configure the Video Recording
+    // Configure the Video Recording Stream
     StreamConfiguration &video_cfg = configuration_->at(1);
     video_cfg.pixelFormat = libcamera::formats::YUV420;
-    video_cfg.bufferCount = 6;  // Use 6 buffers by default
-    if (options_->buffer_count > 0)
-        video_cfg.bufferCount = options_->buffer_count;
-    if (options_->width)
-        video_cfg.size.width = options_->width;
-    if (options_->height)
-        video_cfg.size.height = options_->height;
+    if (videoOptions.buffer_count > 0)
+        video_cfg.bufferCount = videoOptions.buffer_count;
+    else
+        video_cfg.bufferCount = 6;  // Default buffer count
+    if (videoOptions.width)
+        video_cfg.size.width = videoOptions.width;
+    if (videoOptions.height)
+        video_cfg.size.height = videoOptions.height;
     if (flags & FLAG_VIDEO_JPEG_COLOURSPACE)
         video_cfg.colorSpace = libcamera::ColorSpace::Sycc;
     else if (video_cfg.size.width >= 1280 || video_cfg.size.height >= 720)
@@ -651,40 +670,36 @@ void RPiCamApp::ConfigureMultiStream(unsigned int flags)
 
     post_processor_.AdjustConfig("video", &video_cfg);
 
-    // Handling Raw stream if not disabled
-    if (!options_->no_raw)
+    // Raw Stream for Still Capture
+    if (stillOptions.raw)
     {
-        options_->mode.update(video_cfg.size, options_->framerate);
-        options_->mode = selectMode(options_->mode);
+        stillOptions.mode.update(video_cfg.size, stillOptions.framerate);
+        stillOptions.mode = selectMode(stillOptions.mode);
 
         StreamConfiguration &raw_cfg = configuration_->at(2);
-        raw_cfg.size = options_->mode.Size();
-        raw_cfg.pixelFormat = mode_to_pixel_format(options_->mode);
+        raw_cfg.size = stillOptions.mode.Size();
+        raw_cfg.pixelFormat = mode_to_pixel_format(stillOptions.mode);
         raw_cfg.bufferCount = video_cfg.bufferCount;
 
         configuration_->sensorConfig = libcamera::SensorConfiguration();
-        configuration_->sensorConfig->outputSize = options_->mode.Size();
-        configuration_->sensorConfig->bitDepth = options_->mode.bit_depth;
+        configuration_->sensorConfig->outputSize = stillOptions.mode.Size();
+        configuration_->sensorConfig->bitDepth = stillOptions.mode.bit_depth;
     }
 
-    // Set orientation for the streams
-    configuration_->orientation = libcamera::Orientation::Rotate0 * options_->transform;
+    // Set orientation
+    configuration_->orientation = libcamera::Orientation::Rotate0 * stillOptions.transform;
 
     // Apply denoise configuration
-    configureDenoise(options_->denoise == "auto" ? "cdn_fast" : options_->denoise);
-
-    // Finalize the capture setup
+    configureDenoise(stillOptions.denoise == "auto" ? "cdn_fast" : stillOptions.denoise);
     setupCapture();
 
-    // Map the streams to their names
+    // Map the streams
     streams_["viewfinder"] = viewfinder_cfg.stream();
     streams_["video"] = video_cfg.stream();
-    if (!options_->no_raw)
+    if (stillOptions.raw)
         streams_["raw"] = configuration_->at(2).stream();
 
-    // Final post-processing configuration
     post_processor_.Configure();
-
     LOG(2, "Multi-stream setup complete");
 }
 
