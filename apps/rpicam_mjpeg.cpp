@@ -542,6 +542,14 @@ static void event_loop(RPiCamMjpegApp &app)
 
 	while (app.video_active || app.preview_active || app.still_active || app.fifo_active())
 	{
+		if (stopRecording)
+		{
+			LOG(1, "SIGINT caught. Stopping recording.");
+			app.CleanupVideoEncoder();
+			app.video_active = false;  // Ensure video_active is set to false
+			break;
+		}
+
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
 		if (!fifo_command.empty())
@@ -570,14 +578,6 @@ static void event_loop(RPiCamMjpegApp &app)
 		{
 			auto current_time = std::chrono::steady_clock::now();
 			auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
-
-			if (stopRecording)
-			{
-				LOG(1, "SIGINT caught. Stopping recording.");
-				app.CleanupVideoEncoder();
-				app.video_active = false;  // Ensure video_active is set to false
-				break; 
-			}
 
 			if (elapsed_time >= duration_limit_seconds)
 			{
