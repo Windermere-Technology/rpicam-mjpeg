@@ -316,25 +316,42 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+	
 	void px_handle(std::vector<std::string> args)
 	{
-		if (args.size() < 2)
-			throw std::runtime_error("Expected 2 arguments to `px` command for video resolution (width and height)");
+		if (args.size() < 7) // Expecting at least 7 arguments
+			throw std::runtime_error("Expected 7 arguments to `px` command: width height video_fps preview_fps image_width image_height frame_divider");
 
-		int videoWidth = std::stoi(args[0]);  // Video width
-		int videoHeight = std::stoi(args[1]); // Video height
+		// Parse the arguments
+		int videoWidth = std::stoi(args[0]);     // Video width
+		int videoHeight = std::stoi(args[1]);    // Video height
+		int videoFps = std::stoi(args[2]);       // Video FPS
+		int previewFps = std::stoi(args[3]);     // Preview FPS
+		int imageWidth = std::stoi(args[4]);     // Image (still capture) width
+		int imageHeight = std::stoi(args[5]);    // Image (still capture) height
+		int frameDivider = std::stoi(args[6]);   // Frame divider
 
-		// Set the video resolution in the options
+		// Set the video and image resolution in the options
 		auto options = GetOptions();
 		options->videoOptions.width = videoWidth;
 		options->videoOptions.height = videoHeight;
+		options->videoOptions.fps = videoFps;    // Set video FPS
+		
+		options->frameDivider = frameDivider;    // Optional: Handle this as needed
+
+		// Log the parsed values for debugging
+		LOG(1, "px command received: video=" << videoWidth << "x" << videoHeight 
+			<< ", video FPS=" << videoFps << ", preview FPS=" << previewFps 
+			<< ", image=" << imageWidth << "x" << imageHeight 
+			<< ", frame divider=" << frameDivider);
 
 		// Reconfigure the camera with the new resolution
-		StopCamera();
-		Teardown();
-		Configure(options);
-		StartCamera();
+		StopCamera();    // Stop the camera
+		Teardown();      // Clean up the current configuration
+		Configure(options); // Apply the new configuration with the updated resolution
+		StartCamera();   // Restart the camera with the new settings
 	}
+
 
 
 };

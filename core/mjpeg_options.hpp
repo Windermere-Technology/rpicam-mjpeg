@@ -52,6 +52,8 @@ struct MjpegOptions : public Options
 			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
 				"Set the output still height (0 = use default value)")
 			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
+			("frame-divider", value<unsigned int>(&frameDivider)->default_value(1), // Add frameDivider option
+            	"Set the frame divider for video recording (1 = no divider, higher values reduce frame rate)")
 			// Break nopreview flag; the preview will not work in rpicam-mjpeg!
 			("nopreview,n", value<bool>(&nopreview)->default_value(true)->implicit_value(true),
 			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
@@ -144,7 +146,7 @@ struct MjpegOptions : public Options
 		videoOptions.SetApp(app);
 		Options::SetApp(app);
 	}
-
+	unsigned int frameDivider;  // Declare frameDivider here
 	std::string fifo;
 	std::string status_output;
 
