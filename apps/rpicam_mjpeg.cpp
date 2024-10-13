@@ -68,7 +68,7 @@ public:
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
 		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
 		commands["ag"] = std::bind(&RPiCamMjpegApp::ag_handle, this, std::placeholders::_1);
-		commands["is"] = std::bind(&RPiCamMjpegApp::ag_handle, this, std::placeholders::_1);
+		commands["is"] = std::bind(&RPiCamMjpegApp::is_handle, this, std::placeholders::_1);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -327,20 +327,15 @@ public:
 		options->metering = args[0];
 		
 		options->metering_index = new_mm_index;
-
 		options->videoOptions.metering = args[0];
-		
 		options->videoOptions.metering_index = new_mm_index;
-
 		options->stillOptions.metering = args[0];
-		
 		options->stillOptions.metering_index = new_mm_index;
-
 		options->previewOptions.metering = args[0];
-		
 		options->previewOptions.metering_index = new_mm_index;
 
 		//options->videoOptions.Print();
+
 		StopCamera();
 		Teardown();
 		Configure(options);
@@ -363,7 +358,6 @@ public:
 
 		options->ev = ev_comp;
 
-		//options->videoOptions.Print();
 		StopCamera();
 		Teardown();
 		Configure(options);
@@ -379,12 +373,12 @@ public:
 		float ag_blue = -1;
 		try{
 			ag_red = stof(args[0]);
-			ag_blue = stof(args[0]);
+			ag_blue = stof(args[1]);
 			if (ag_red < 0 || ag_blue < 0){
 				throw std::invalid_argument("Negative values are not allowed.");
 			}
 			float epsilon = 0.00001f;
-			if ((ag_red + ag_blue - 2.0f) < epsilon) {
+			if ((ag_red + ag_blue - 2.0f) > epsilon) {
 				throw std::invalid_argument("The sum of red gain and blue gain must be 2.0");
 			}
 				
@@ -392,9 +386,12 @@ public:
 			std::cerr << "Invalid argument: One of the values is not a valid positive number." << std::endl;
 			return;
 		} 
-		string ag_br =  std::to_string(ag_red) + "+ " + std::to_string(ag_blue);
+		std::string ag_br =  std::to_string(ag_red) + "," + std::to_string(ag_blue);
 		options->awbgains = ag_br;
-
+		options->awb_gain_r = ag_red;
+		options->awb_gain_b = ag_blue;
+		
+		options->videoOptions.Print();
 		//options->videoOptions.Print();
 		StopCamera();
 		Teardown();
