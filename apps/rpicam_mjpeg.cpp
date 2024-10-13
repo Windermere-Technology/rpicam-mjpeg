@@ -69,6 +69,7 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["mv"] = std::bind(&RPiCamMjpegApp::mv_handle, this, std::placeholders::_1);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -83,6 +84,7 @@ public:
 	bool still_active;
 	bool video_active;
 	bool motion_active;
+	bool firstTime = true; 	// helper var for motion detect
 	// TODO: Remove this variable altogether... eventually
 	bool multi_active;
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
@@ -320,6 +322,36 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+
+	void mv_handle(std::vector<std::string> args){
+		if (args.size() < 1 || args[0] != "1")
+		{ 
+			if (motion_active) 
+					cleanup();
+			motion_active = false;
+		}
+		else if (args.size() < 4)
+		{
+			throw std::runtime_error("Expected four arguments to `mv` command");
+		}
+		else
+		{
+			motion_active = true;	
+			firstTime = true;
+			auto options = GetOptions();
+			
+			// relative parameter
+			options->lores_width = stoi(args[1]);
+			options->lores_height = stoi(args[2]);
+			options->post_process_file = "assets/motion_detect.json";
+			options->motion_detect = true;
+
+			StopCamera();
+			Teardown();
+			Configure(options);
+			StartCamera();
+		}
+	}
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -399,20 +431,19 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 }
 
 // motion detect function
-static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request)
+static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request, std::string& filename)
 {
 	// Create an instance of MotionDetectStage
 	static MotionDetectStage motionDetectStage(&app);
-	static bool firstTime = true;
-
-	// Configure the motion detection stage
-	if (firstTime)
+	
+	if (app.firstTime && app.fifo_active())
 	{
 		boost::property_tree::ptree root;
-		boost::property_tree::read_json("assets/motion_detect.json", root);
-		motionDetectStage.Read(root);
+		boost::property_tree::read_json(filename, root);
+		boost::property_tree::ptree params = root.get_child("motion_detect");
+		motionDetectStage.Read(params);
 		motionDetectStage.Configure();
-		firstTime = false;
+		app.firstTime = false;
 	}
 
 	motionDetectStage.Process(completed_request);
@@ -567,6 +598,7 @@ static void event_loop(RPiCamMjpegApp &app)
 		// Process the VideoRecording stream
 		if (app.VideoStream())
 		{
+			// LOG(1, "here");
 			Stream *video_stream = app.VideoStream();
 			StreamInfo video_info = app.GetStreamInfo(video_stream);
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
@@ -581,7 +613,8 @@ static void event_loop(RPiCamMjpegApp &app)
 
 			if (app.motion_active)
 			{
-				motion_detect(app, completed_request);
+				motion_detect(app, completed_request, options->post_process_file);
+				// LOG(1, "FIFO correctly set");
 			}
 		}
 		LOG(2, "Request processing completed, current status: " + app.status());
