@@ -390,7 +390,7 @@ public:
 		options->awbgains = ag_br;
 		options->awb_gain_r = ag_red;
 		options->awb_gain_b = ag_blue;
-		
+
 		options->videoOptions.Print();
 		//options->videoOptions.Print();
 		StopCamera();
@@ -404,16 +404,16 @@ public:
 			throw std::runtime_error("Expected only one argument for `is` command");
 		
 		auto options = GetOptions();
-		float ev_comp = -1;
+		float gain = -1;
 		try{
-			ev_comp = stof(args[0]);
-			ev_comp = std::max(100.0f, std::min(ev_comp, 800.0f));
+			gain = stof(args[0]);
+			gain = std::max(100.0f, std::min(ev_comp, 800.0f));
 		} catch (const std::invalid_argument &e) {
 			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
 			return;
 		} 
 
-		options->ev = ev_comp;
+		options->gain = gain;
 
 		//options->videoOptions.Print();
 		StopCamera();
