@@ -433,7 +433,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	}
 
 	// -1 indicates indefinte recording (until `ca 0` recv'd.)
-	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
+	int duration_limit_seconds = options->fifo.empty() ? 10 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
 	while (app.video_active || app.preview_active || app.still_active || app.fifo_active())
@@ -482,6 +482,14 @@ static void event_loop(RPiCamMjpegApp &app)
 				app.video_active = false;
 			}
 		}
+
+		// Exit FIFO loop if SIGINT (Ctrl+C) is caught
+		if (stopRecording)
+		{
+			LOG(1, "SIGINT caught. Exiting FIFO loop.");
+			break;  // Exit the FIFO loop when SIGINT is received
+		}
+
 
 		RPiCamApp::Msg msg = app.Wait();
 		if (msg.type == RPiCamApp::MsgType::Timeout)
