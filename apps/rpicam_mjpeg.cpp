@@ -65,6 +65,8 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["px"] = std::bind(&RPiCamMjpegApp::px_handle, this, std::placeholders::_1); // video resolution
+
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -109,6 +111,7 @@ public:
 		std::ofstream stream(status_output);
 		stream << status();
 	}
+
 
 	void Configure(MjpegOptions *options)
 	{
@@ -313,6 +316,27 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+	void px_handle(std::vector<std::string> args)
+	{
+		if (args.size() < 2)
+			throw std::runtime_error("Expected 2 arguments to `px` command for video resolution (width and height)");
+
+		int videoWidth = std::stoi(args[0]);  // Video width
+		int videoHeight = std::stoi(args[1]); // Video height
+
+		// Set the video resolution in the options
+		auto options = GetOptions();
+		options->videoOptions.width = videoWidth;
+		options->videoOptions.height = videoHeight;
+
+		// Reconfigure the camera with the new resolution
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -410,7 +434,8 @@ std::vector<std::string> tokenizer(const std::string& str, const std::string& de
     return tokens;
 }
 	
- 
+
+
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -548,7 +573,6 @@ static void event_loop(RPiCamMjpegApp &app)
 			StreamInfo video_info = app.GetStreamInfo(video_stream);
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
 			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
-
 			if (app.video_active)
 			{
 				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
@@ -560,15 +584,17 @@ static void event_loop(RPiCamMjpegApp &app)
 	}
 }
 
+
+
 int main(int argc, char *argv[])
 {	
 	std::signal(SIGINT, signal_handler); // deal with SIGINT
 	try
 	{
-         // Initialize the resolution checker and print available video modes - for future use
-        CameraResolutionChecker checker;
-        std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
-        std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
+        //  // Initialize the resolution checker and print available video modes - for future use
+        // CameraResolutionChecker checker;
+        // std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
+        // std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
 
 		RPiCamMjpegApp app;
 		try
