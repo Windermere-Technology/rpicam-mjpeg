@@ -319,7 +319,7 @@ public:
 	void mm_handle(std::vector<std::string> args){
 		if (args.size() != 1)
 			throw std::runtime_error("Expected only one argument for `mm` command");
-		
+		// accepts: centre, spot, average, matrix, custom
 		auto options = GetOptions();
 		auto new_mm_index = Options::MMLookup(args[0]);
 		options->metering = args[0];
