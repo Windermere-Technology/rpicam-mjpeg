@@ -65,6 +65,9 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["co"] = std::bind(&RPiCamMjpegApp::co_handle, this, std::placeholders::_1);
+		commands["br"] = std::bind(&RPiCamMjpegApp::br_handle, this, std::placeholders::_1);
+		commands["sa"] = std::bind(&RPiCamMjpegApp::sa_handle, this, std::placeholders::_1);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -313,6 +316,109 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+
+	void co_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected at most 1 argument to `co` command");
+
+		float contrast = std::stof(args[0]);  // Use float for contrast
+
+		float normalized_contrast;
+
+		if (contrast < 0.0f) {
+			// If contrast is less than 0, map it to the range [0, 1]
+			normalized_contrast = (contrast + 100.0f) * (1.0f / 100.0f);
+		} else if (contrast == 0.0f) {
+			// If contrast is 0, set it to 1
+			normalized_contrast = 1.0f;
+		} else {
+			// If contrast is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_contrast = 1 + (contrast * 14.99f) / 100.0f;
+		}
+
+		auto options = GetOptions();
+		options->contrast = std::clamp(normalized_contrast, 0.0f, 15.99f);
+		LOG(1, "Contrast updated to: " << options->contrast);  // Log the updated contrast value
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void br_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `br` command");
+
+		float brightness = std::stof(args[0]);  // Use float for brightness
+
+		// Clamp brightness to the valid range [0, 100]
+		brightness = std::max(0.0f, std::min(brightness, 100.0f));
+
+		// Convert brightness to the range [-1.0f, 1.0f]
+		float normalized_brightness = (brightness / 50.0f) - 1.0f;
+
+		auto options = GetOptions();
+		options->brightness = normalized_brightness;
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+	
+	void sa_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected at most 1 argument to `sa` command");
+
+		float saturation = std::stof(args[0]);  // Use float for contrast
+
+		float normalized_saturation;
+
+		if (saturation < 0.0f) {
+			// If saturation is less than 0, map it to the range [0, 1]
+			normalized_saturation = (saturation + 100.0f) * (1.0f / 100.0f);
+		} else if (saturation == 0.0f) {
+			// If saturation is 0, set it to 1
+			normalized_saturation = 1.0f;
+		} else {
+			// If saturation is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_saturation = 1 + (saturation * 14.99f) / 100.0f;
+		}
+
+		auto options = GetOptions();
+		options->saturation = std::clamp(normalized_saturation, 0.0f, 15.99f);
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void ss_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `ss` command");
+
+		int shutter_speed = std::stoi(args[0]);  
+		if (shutter_speed < 0)
+			shutter_speed = 0;  // keep shutter speed to a positive value
+
+		auto options = GetOptions();
+
+		// Convert the shutter speed to a string and pass it to the set method
+		options->shutter.set(std::to_string(shutter_speed));
+
+		LOG(1, "Shutter speed updated to: " << shutter_speed << " microseconds");
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
 };
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
@@ -457,6 +563,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				std::cout << "Invalid command: " << tokens[0] << std::endl;
 			}
+
 		}
 
 		app.WriteStatus();
