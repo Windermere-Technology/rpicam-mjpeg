@@ -293,22 +293,24 @@ public:
 	{
 		if (args.size() != 1)
 			throw std::runtime_error("expected exactly 1 argument to `br` command");
-
+	
 		float brightness = std::stof(args[0]);  // Use float for brightness
-
-		// keep brightness to the valid range [0, 100]
+	
+		// Clamp brightness to the valid range [0, 100]
 		brightness = std::max(0.0f, std::min(brightness, 100.0f));
-
+	
+		// Convert brightness to the range [-1.0f, 1.0f]
+		float normalized_brightness = (brightness / 50.0f) - 1.0f;
+	
 		auto options = GetOptions();
-		options->brightness = brightness;
-		LOG(1, "Brightness updated to: " << options->brightness);  // Log the updated brightness value
-
+		options->brightness = normalized_brightness;
+	
 		StopCamera();
 		Teardown();
 		Configure(options);
 		StartCamera();
 	}
-
+	
 	void sa_handle(std::vector<std::string> args)
 	{
 		if (args.size() != 1)
