@@ -70,7 +70,7 @@ public:
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
 	}
 
-	~RPiCamMjpegApp() { CleanupVideoEncoder(); }
+	~RPiCamMjpegApp() { cleanup(); }
 
 	MjpegOptions *GetOptions() const { return static_cast<MjpegOptions *>(options_.get()); }
 
@@ -107,7 +107,7 @@ public:
 	}
 
 	// Report the application status to --status-output file.
-	void WriteStatus()
+	void write_status()
 	{
 		std::string status_output = GetOptions()->status_output;
 		if (status_output.empty())
@@ -134,7 +134,7 @@ public:
 	}
 
 	// Function to initialize the encoder and file output
-	void InitializeVideoEncoder(VideoOptions &videoOptions, const StreamInfo &info)
+	void initialize_encoder(VideoOptions &videoOptions, const StreamInfo &info)
 	{
 		if (!h264Encoder)
 		{
@@ -167,7 +167,7 @@ public:
 			});
 	}
 
-	void CleanupVideoEncoder()
+	void cleanup()
 	{
 		if (h264Encoder)
 		{
@@ -187,7 +187,7 @@ public:
 
 	// FIXME: This name is terrible!
 	// TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
-	std::string GetFifoCommand()
+	std::string get_fifo_command()
 	{
 		static std::string fifo_path = GetOptions()->fifo;
 		static int fd = -1;
@@ -285,7 +285,7 @@ public:
 		if (args.size() < 1 || args[0] != "1")
 			{ // ca 0, or some invalid command.
 				if (video_active)  // finish up with the current recording.
-					CleanupVideoEncoder();
+					cleanup();
 				video_active = false;
 
 			}
@@ -380,8 +380,8 @@ public:
 		VideoOptions &options = GetOptions()->videoOptions;
 		std::string const filename = options.output;
 
-		// Use the app instance to call InitializeVideoEncoder
-		InitializeVideoEncoder(options, info);
+		// Use the app instance to call initialize_encoder
+		initialize_encoder(options, info);
 
 		// Check if the encoder and file output were successfully initialized
 		if (!h264Encoder)
@@ -543,7 +543,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	while (app.video_active || app.preview_active || app.still_active || app.fifo_active())
 	{
 		// Check if there are any commands over the FIFO.
-		std::string fifo_command = app.GetFifoCommand();
+		std::string fifo_command = app.get_fifo_command();
 		if (!fifo_command.empty())
 		{			
 			LOG(1, "Got command from FIFO: " + fifo_command);
@@ -563,7 +563,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 		}
 
-		app.WriteStatus();
+		app.write_status();
 
 		// If video is active and a duration is set, check the elapsed time
 		if (app.video_active && duration_limit_seconds >= 0)
@@ -574,7 +574,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (stopRecording)
 			{
 				LOG(1, "SIGINT caught. Stopping recording.");
-				app.CleanupVideoEncoder();
+				app.cleanup();
 				app.video_active = false;  // Ensure video_active is set to false
 				break; 
 			}
@@ -582,7 +582,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (elapsed_time >= duration_limit_seconds)
 			{
 				std::cout << "time limit: " << duration_limit_seconds << " seconds is reached. stop." << std::endl;
-				app.CleanupVideoEncoder();
+				app.cleanup();
 				app.video_active = false;
 			}
 		}
@@ -675,7 +675,7 @@ int main(int argc, char *argv[])
 		catch (std::exception const &e)
 		{
 			app.error = e.what();
-			app.WriteStatus();
+			app.write_status();
 			throw;
 		}
 	}
