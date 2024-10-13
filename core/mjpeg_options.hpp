@@ -182,6 +182,21 @@ struct MjpegOptions : public Options
 		flip_ = value;
 		updateTransform();
 	}
+
+	void SetMM(std::string new_mm)
+	{
+		// NOTE: This will throw if we got an unhandled value.
+		auto new_mm_index = Options::MMLookup(new_mm);
+
+		metering = new_mm;
+		metering_index = new_mm_index;
+		stillOptions.metering = new_mm;
+		stillOptions.metering_index = new_mm_index;
+		previewOptions.metering = new_mm;
+		previewOptions.metering_index = new_mm_index;
+		videoOptions.metering = new_mm;
+		videoOptions.metering_index = new_mm_index;
+	}
 private:
 	libcamera::Transform rot_;
 	libcamera::Transform flip_;

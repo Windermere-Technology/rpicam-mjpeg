@@ -65,6 +65,7 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -299,7 +300,7 @@ public:
 	{
 		// pv QQ WWW DD - set preview Quality, Width and Divider
 		if (args.size() < 3)
-			throw std::runtime_error("Expected three arguments to `pv` command");
+			throw std::runtime_error("Expected at least three arguments to `pv` command");
 		
 
 		auto options = GetOptions();
@@ -311,6 +312,20 @@ public:
 		Teardown();
 		Configure(options);
 		preview_active = true;
+		StartCamera();
+	}
+
+	void mm_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `mm` command");
+		
+		
+		auto options = GetOptions();
+		options->SetMM(args[0]);
+
+		StopCamera();
+		Teardown();
+		Configure(options);
 		StartCamera();
 	}
 };
