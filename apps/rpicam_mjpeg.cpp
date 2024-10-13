@@ -272,15 +272,25 @@ public:
 	void co_handle(std::vector<std::string> args)
 	{
 		if (args.size() != 1)
-			throw std::runtime_error("expected exactly 1 argument to `co` command");
+			throw std::runtime_error("expected at most 1 argument to `co` command");
 
 		float contrast = std::stof(args[0]);  // Use float for contrast
 
-		// keep contrast to the valid range [-100, 100]
-		contrast = std::max(-100.0f, std::min(contrast, 100.0f));
+		float normalized_contrast;
+
+		if (contrast < 0.0f) {
+			// If contrast is less than 0, map it to the range [0, 1]
+			normalized_contrast = (contrast + 100.0f) * (1.0f / 100.0f);
+		} else if (contrast == 0.0f) {
+			// If contrast is 0, set it to 1
+			normalized_contrast = 1.0f;
+		} else {
+			// If contrast is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_contrast = 1 + (contrast * 14.99f) / 100.0f;
+		}
 
 		auto options = GetOptions();
-		options->contrast = contrast;
+		options->contrast = std::clamp(normalized_contrast, 0.0f, 15.99f);
 		LOG(1, "Contrast updated to: " << options->contrast);  // Log the updated contrast value
 
 		StopCamera();
