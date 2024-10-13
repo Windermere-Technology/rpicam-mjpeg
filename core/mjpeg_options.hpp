@@ -126,14 +126,14 @@ struct MjpegOptions : public Options
 
 		// Save the actual rotation/flip applied by the settings, as we need this later.
 		bool ok;
-		rot(transformFromRotation(rotation(), &ok));
+		SetRotation(transformFromRotation(rotation(), &ok));
 		assert(ok && "This should have failed already if it was going to.");
-		Transform flip_ = Transform::Identity;
+		Transform flip = Transform::Identity;
 		if (vflip())
-			flip_ = flip_ * Transform::VFlip;
+			flip = flip * Transform::VFlip;
 		if (hflip())
-			flip_ = flip_ * Transform::HFlip;
-		flip(flip_);
+			flip = flip * Transform::HFlip;
+		SetFlip(flip);
 
 		return true;
 	}
@@ -171,18 +171,30 @@ struct MjpegOptions : public Options
 	*/
 	libcamera::Transform rot() const { return rot_; }
 
-	void rot(libcamera::Transform value)
+	void SetRotation(libcamera::Transform value)
 	{
 		rot_ = value;
 		updateTransform();
 	};
 
-	libcamera::Transform flip() const { return flip_; }
-
-	void flip(libcamera::Transform value)
+	void SetFlip(libcamera::Transform value)
 	{
 		flip_ = value;
 		updateTransform();
+	}
+
+	void SetAwb(std::string new_awb)
+	{
+		// NOTE: This will throw if we got an unhandled value.
+		auto new_awb_index = Options::AwbLookup(new_awb);
+		awb = new_awb;
+		awb_index = new_awb_index;
+		stillOptions.awb = new_awb;
+		stillOptions.awb_index = new_awb_index;
+		previewOptions.awb = new_awb;
+		previewOptions.awb_index = new_awb_index;
+		videoOptions.awb = new_awb;
+		videoOptions.awb_index = new_awb_index;
 	}
 
 private:

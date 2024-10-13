@@ -65,6 +65,7 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["wb"] = std::bind(&RPiCamMjpegApp::wb_handle, this, std::placeholders::_1);
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
 		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
 		commands["px"] = std::bind(&RPiCamMjpegApp::px_handle, this, std::placeholders::_1); // video resolution
@@ -239,7 +240,7 @@ public:
 			throw std::runtime_error("unsupported rotation value: " + args[0]);
 
 		auto options = GetOptions();
-		options->rot(rot);
+		options->SetRotation(rot);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
@@ -267,7 +268,7 @@ public:
 			flip = Transform::HFlip * flip;
 		if (vflip)
 			flip = Transform::VFlip * flip;
-		options->flip(flip);
+		options->SetFlip(flip);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
@@ -320,6 +321,32 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+
+	void wb_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly one argument to `wb` command");
+
+		std::string awb = args[0];
+		auto options = GetOptions();
+		try
+		{
+			options->SetAwb(awb);
+		}
+		catch (const std::exception &e)
+		{
+			// We got some AWB value which libcamera does not support; ignore the command.
+			LOG(1, e.what());
+			return;
+		}
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
 	
 	void px_handle(std::vector<std::string> args)
 	{
@@ -356,10 +383,6 @@ public:
 		StartCamera();   // Restart the camera with the new settings
 	}
 
-
-
-
-
 	void mm_handle(std::vector<std::string> args){
 		if (args.size() != 1)
 			throw std::runtime_error("Expected only one argument for `mm` command");
@@ -367,23 +390,15 @@ public:
 		auto options = GetOptions();
 		auto new_mm_index = Options::MMLookup(args[0]);
 		options->metering = args[0];
-		
 		options->metering_index = new_mm_index;
-
 		options->videoOptions.metering = args[0];
-		
 		options->videoOptions.metering_index = new_mm_index;
-
 		options->stillOptions.metering = args[0];
-		
 		options->stillOptions.metering_index = new_mm_index;
-
 		options->previewOptions.metering = args[0];
-		
 		options->previewOptions.metering_index = new_mm_index;
-
 		//options->videoOptions.Print();
-    StopCamera();
+		StopCamera();
 		Teardown();
 		Configure(options);
 		StartCamera();
@@ -459,7 +474,7 @@ public:
 		options->ev = ev_comp;
 
 		//options->videoOptions.Print();
-    StopCamera();
+		StopCamera();
 		Teardown();
 		Configure(options);
 		StartCamera();

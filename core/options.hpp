@@ -185,6 +185,8 @@ struct Options
 	
 	static int MMLookup(std::string meter);
 
+	static int AwbLookup(std::string awb);
+
 protected:
 	boost::program_options::options_description options_;
 	bool hflip() const { return hflip_; }
