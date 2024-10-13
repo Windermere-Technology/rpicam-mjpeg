@@ -82,6 +82,7 @@ public:
 	bool preview_active;
 	bool still_active;
 	bool video_active;
+	bool motion_active;
 	// TODO: Remove this variable altogether... eventually
 	bool multi_active;
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
@@ -101,6 +102,8 @@ public:
 			return "video"; // recording
 		if (preview_active)
 			return "ready"; // preview only
+		if (motion_active)
+			return "motion"; // motion detection
 		return "halted"; // nothing
 	}
 
@@ -121,7 +124,7 @@ public:
 			// Call the multi-stream configuration function
 			ConfigureMultiStream(options->stillOptions, options->videoOptions, options->previewOptions, 0);
 		}
-		else if (video_active)
+		else if (video_active || motion_active)
 		{
 			ConfigureVideo();
 		}
@@ -395,6 +398,28 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
 }
 
+// motion detect function
+static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request)
+{
+	// Create an instance of MotionDetectStage
+	static MotionDetectStage motionDetectStage(&app);
+	static bool firstTime = true;
+
+	// Configure the motion detection stage
+	if (firstTime)
+	{
+		boost::property_tree::ptree root;
+		boost::property_tree::read_json("assets/motion_detect.json", root);
+		motionDetectStage.Read(root);
+		motionDetectStage.Configure();
+		firstTime = false;
+	}
+
+	motionDetectStage.Process(completed_request);
+}
+
+
+
 // Function to tokenize the FIFO command
 std::vector<std::string> tokenizer(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> tokens;
@@ -424,6 +449,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	app.preview_active = !options->previewOptions.output.empty();
 	app.still_active = !options->stillOptions.output.empty();
 	app.video_active = !options->videoOptions.output.empty();
+	app.motion_active = options->motion_detect;
 	app.multi_active = ((int)app.preview_active + (int)app.still_active + (int)app.video_active) > 1;
 
 	app.OpenCamera();
@@ -434,13 +460,14 @@ static void event_loop(RPiCamMjpegApp &app)
 	if (app.fifo_active()) {
 		app.video_active = false;
 		app.still_active = false;
+		app.motion_active = false;
 	}
 
 	// -1 indicates indefinte recording (until `ca 0` recv'd.)
 	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
-	while (app.video_active || app.preview_active || app.still_active || app.fifo_active())
+	while (app.video_active || app.preview_active || app.still_active || app.motion_active || app.fifo_active())
 	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
@@ -551,6 +578,11 @@ static void event_loop(RPiCamMjpegApp &app)
 						   app.CameraModel(), options->videoOptions, completed_request, video_stream);
 				LOG(2, "Video recorded and saved");
 			}
+
+			if (app.motion_active)
+			{
+				motion_detect(app, completed_request);
+			}
 		}
 		LOG(2, "Request processing completed, current status: " + app.status());
 	}
@@ -576,9 +608,9 @@ int main(int argc, char *argv[])
 				if (options->verbose >= 2)
 					options->Print();
 				if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
-					options->videoOptions.output.empty())
+					options->videoOptions.output.empty() && !options->motion_detect)
 					throw std::runtime_error(
-						"At least one of --preview-output, --still-output or --video-output should be provided.");
+						"At least one of --preview-output, --still-output, --video-output, or --motion-detect should be provided.");
 
 				event_loop(app);
 			}
