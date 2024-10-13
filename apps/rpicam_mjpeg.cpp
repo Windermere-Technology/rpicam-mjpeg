@@ -67,6 +67,8 @@ public:
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
 		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
+		commands["ag"] = std::bind(&RPiCamMjpegApp::ag_handle, this, std::placeholders::_1);
+		commands["is"] = std::bind(&RPiCamMjpegApp::ag_handle, this, std::placeholders::_1);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -354,6 +356,61 @@ public:
 		try{
 			ev_comp = stof(args[0]);
 			ev_comp = std::max(-10.0f, std::min(ev_comp, 10.0f));
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
+			return;
+		} 
+
+		options->ev = ev_comp;
+
+		//options->videoOptions.Print();
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void ag_handle(std::vector<std::string> args){
+		if (args.size() != 2)
+			throw std::runtime_error("Expected only two arguments for `ag` command");
+		
+		auto options = GetOptions();
+		float ag_red = -1;
+		float ag_blue = -1;
+		try{
+			ag_red = stof(args[0]);
+			ag_blue = stof(args[0]);
+			if (ag_red < 0 || ag_blue < 0){
+				throw std::invalid_argument("Negative values are not allowed.");
+			}
+			float epsilon = 0.00001f;
+			if ((ag_red + ag_blue - 2.0f) < epsilon) {
+				throw std::invalid_argument("The sum of red gain and blue gain must be 2.0");
+			}
+				
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: One of the values is not a valid positive number." << std::endl;
+			return;
+		} 
+		string ag_br =  std::to_string(ag_red) + "+ " + std::to_string(ag_blue);
+		options->awbgains = ag_br;
+
+		//options->videoOptions.Print();
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void is_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `is` command");
+		
+		auto options = GetOptions();
+		float ev_comp = -1;
+		try{
+			ev_comp = stof(args[0]);
+			ev_comp = std::max(100.0f, std::min(ev_comp, 800.0f));
 		} catch (const std::invalid_argument &e) {
 			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
 			return;
