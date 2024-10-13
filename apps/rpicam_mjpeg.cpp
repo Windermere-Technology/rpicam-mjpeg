@@ -65,6 +65,7 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["px"] = std::bind(&RPiCamMjpegApp::px_handle, this, std::placeholders::_1); // video resolution
 		commands["co"] = std::bind(&RPiCamMjpegApp::co_handle, this, std::placeholders::_1);
 		commands["br"] = std::bind(&RPiCamMjpegApp::br_handle, this, std::placeholders::_1);
 		commands["sa"] = std::bind(&RPiCamMjpegApp::sa_handle, this, std::placeholders::_1);
@@ -112,6 +113,7 @@ public:
 		std::ofstream stream(status_output);
 		stream << status();
 	}
+
 
 	void Configure(MjpegOptions *options)
 	{
@@ -316,6 +318,44 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
+	
+	void px_handle(std::vector<std::string> args)
+	{
+		if (args.size() < 7) // Expecting at least 7 arguments
+			throw std::runtime_error("Expected 7 arguments to `px` command: width height video_fps preview_fps image_width image_height frame_divider");
+
+		// Parse the arguments
+		int videoWidth = std::stoi(args[0]);     // Video width
+		int videoHeight = std::stoi(args[1]);    // Video height
+		int videoFps = std::stoi(args[2]);       // Video FPS
+		int previewFps = std::stoi(args[3]);     // Preview FPS
+		int imageWidth = std::stoi(args[4]);     // Image (still capture) width
+		int imageHeight = std::stoi(args[5]);    // Image (still capture) height
+		int frameDivider = std::stoi(args[6]);   // Frame divider
+
+		// Set the video and image resolution in the options
+		auto options = GetOptions();
+		options->videoOptions.width = videoWidth;
+		options->videoOptions.height = videoHeight;
+		options->videoOptions.fps = videoFps;    // Set video FPS
+		
+		options->frameDivider = frameDivider;    // Optional: Handle this as needed
+
+		// Log the parsed values for debugging
+		LOG(1, "px command received: video=" << videoWidth << "x" << videoHeight 
+			<< ", video FPS=" << videoFps << ", preview FPS=" << previewFps 
+			<< ", image=" << imageWidth << "x" << imageHeight 
+			<< ", frame divider=" << frameDivider);
+
+		// Reconfigure the camera with the new resolution
+		StopCamera();    // Stop the camera
+		Teardown();      // Clean up the current configuration
+		Configure(options); // Apply the new configuration with the updated resolution
+		StartCamera();   // Restart the camera with the new settings
+	}
+
+
+
 
 	void co_handle(std::vector<std::string> args)
 	{
@@ -516,7 +556,8 @@ std::vector<std::string> tokenizer(const std::string& str, const std::string& de
     return tokens;
 }
 	
- 
+
+
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -655,7 +696,6 @@ static void event_loop(RPiCamMjpegApp &app)
 			StreamInfo video_info = app.GetStreamInfo(video_stream);
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
 			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
-
 			if (app.video_active)
 			{
 				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
@@ -667,15 +707,17 @@ static void event_loop(RPiCamMjpegApp &app)
 	}
 }
 
+
+
 int main(int argc, char *argv[])
 {	
 	std::signal(SIGINT, signal_handler); // deal with SIGINT
 	try
 	{
-         // Initialize the resolution checker and print available video modes - for future use
-        CameraResolutionChecker checker;
-        std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
-        std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
+        //  // Initialize the resolution checker and print available video modes - for future use
+        // CameraResolutionChecker checker;
+        // std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
+        // std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
 
 		RPiCamMjpegApp app;
 		try
