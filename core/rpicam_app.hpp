@@ -224,12 +224,6 @@ private:
 			queue_ = {};
 		}
 
-		// Getter for camera_
-		std::shared_ptr<libcamera::Camera> GetCamera()
-		{
-			return camera_;
-		}
-
 	private:
 		std::queue<T> queue_;
 		std::mutex mutex_;
