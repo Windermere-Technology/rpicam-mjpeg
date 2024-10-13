@@ -138,9 +138,22 @@ On terminal a:
 
 On terminal b:
 ```bash
-cho 'pv 1000 500' > /tmp/FIFO
+echo 'pv 1000 500' > /tmp/FIFO
 ```
 To set the size of preview window as 1000 x 500.
+
+### 4: Metering
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'ca 1 30' > /tmp/FIFO
+echo 'mm centre' > /tmp/FIFO
+```
+To change metering option during video recording;
 
 ---
 
