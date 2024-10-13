@@ -372,15 +372,25 @@ public:
 	void sa_handle(std::vector<std::string> args)
 	{
 		if (args.size() != 1)
-			throw std::runtime_error("expected exactly 1 argument to `sa` command");
+			throw std::runtime_error("expected at most 1 argument to `sa` command");
 
-		float saturation = std::stof(args[0]);  // Use float for saturation
+		float saturation = std::stof(args[0]);  // Use float for contrast
 
-		// keep saturation to the valid range [-100, 100]
-		saturation = std::max(-100.0f, std::min(saturation, 100.0f));
+		float normalized_saturation;
+
+		if (saturation < 0.0f) {
+			// If saturation is less than 0, map it to the range [0, 1]
+			normalized_saturation = (saturation + 100.0f) * (1.0f / 100.0f);
+		} else if (saturation == 0.0f) {
+			// If saturation is 0, set it to 1
+			normalized_saturation = 1.0f;
+		} else {
+			// If saturation is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_saturation = 1 + (saturation * 14.99f) / 100.0f;
+		}
+
 		auto options = GetOptions();
-		options->saturation = saturation;
-		LOG(1, "Saturation updated to: " << options->saturation);  // Log the updated saturation value
+		options->saturation = std::clamp(normalized_saturation, 0.0f, 15.99f);
 
 		StopCamera();
 		Teardown();
