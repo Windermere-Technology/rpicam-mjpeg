@@ -321,8 +321,20 @@ public:
 		
 		
 		auto options = GetOptions();
-		options->SetMM(args[0]);
+		auto new_mm_index = Options::MMLookup(args[0]);
+		options->videoOptions.metering = args[0];
+		
+		options->videoOptions.metering_index = new_mm_index;
 
+		options->stillOptions.metering = args[0];
+		
+		options->stillOptions.metering_index = new_mm_index;
+
+		options->previewOptions.metering = args[0];
+		
+		options->previewOptions.metering_index = new_mm_index;
+
+		//options->videoOptions.Print();
 		StopCamera();
 		Teardown();
 		Configure(options);
