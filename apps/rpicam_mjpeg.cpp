@@ -319,9 +319,12 @@ public:
 		if (args.size() != 1)
 			throw std::runtime_error("Expected only one argument for `mm` command");
 		
-		
 		auto options = GetOptions();
 		auto new_mm_index = Options::MMLookup(args[0]);
+		options->metering = args[0];
+		
+		options->metering_index = new_mm_index;
+
 		options->videoOptions.metering = args[0];
 		
 		options->videoOptions.metering_index = new_mm_index;
