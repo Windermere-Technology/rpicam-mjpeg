@@ -66,6 +66,7 @@ public:
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
+		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -336,6 +337,29 @@ public:
 		options->previewOptions.metering = args[0];
 		
 		options->previewOptions.metering_index = new_mm_index;
+
+		//options->videoOptions.Print();
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void ec_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `ec` command");
+		
+		auto options = GetOptions();
+		float ev_comp = -1;
+		try{
+			ev_comp = stof(args[0]);
+			ev_comp = std::max(-10.0f, std::min(ev_comp, 10.0f));
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
+			return;
+		} 
+
+		options->ev = ev_comp;
 
 		//options->videoOptions.Print();
 		StopCamera();
