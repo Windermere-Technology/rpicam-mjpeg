@@ -176,13 +176,14 @@ struct Options
 	TimeVal<std::chrono::microseconds> flicker_period;
 	bool no_raw;
 
-
 	virtual bool Parse(int argc, char *argv[]);
 	virtual bool Parse(int argc, char *argv[], std::vector<std::string> *unrecognized);
 	virtual void Print() const;
 
 	virtual void SetApp(RPiCamApp *app) { app_ = app; }
 	Platform GetPlatform() const { return platform_; };
+	
+	static int MMLookup(std::string meter);
 
 protected:
 	boost::program_options::options_description options_;

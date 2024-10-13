@@ -311,12 +311,27 @@ Options::Options()
 	// This is really the best place to cache the platform, all components
 	// in rpicam-apps get the options structure;
 	platform_ = get_platform();
+
 }
 
 bool Options::Parse(int argc, char *argv[])
 {
 	return Options::Parse(argc, argv, nullptr);
 }
+
+int Options::MMLookup(std::string meter)
+	{
+		std::map<std::string, int> metering_table = { 
+			{ "centre", libcamera::controls::MeteringCentreWeighted },
+			{ "spot", libcamera::controls::MeteringSpot },
+			{ "average", libcamera::controls::MeteringMatrix },
+			{ "matrix", libcamera::controls::MeteringMatrix },
+			{ "custom", libcamera::controls::MeteringCustom } 
+			};
+		if (metering_table.count(meter) == 0)
+			throw std::runtime_error("Invalid metering mode: " + meter);
+		return metering_table[meter];
+	}
 
 bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecognized)
 {

@@ -65,6 +65,8 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
+		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
 		commands["px"] = std::bind(&RPiCamMjpegApp::px_handle, this, std::placeholders::_1); // video resolution
 		commands["co"] = std::bind(&RPiCamMjpegApp::co_handle, this, std::placeholders::_1);
 		commands["br"] = std::bind(&RPiCamMjpegApp::br_handle, this, std::placeholders::_1);
@@ -304,7 +306,7 @@ public:
 	{
 		// pv QQ WWW DD - set preview Quality, Width and Divider
 		if (args.size() < 3)
-			throw std::runtime_error("Expected three arguments to `pv` command");
+			throw std::runtime_error("Expected at least three arguments to `pv` command");
 		
 
 		auto options = GetOptions();
@@ -357,6 +359,36 @@ public:
 
 
 
+
+	void mm_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `mm` command");
+		// accepts: centre, spot, average, matrix, custom
+		auto options = GetOptions();
+		auto new_mm_index = Options::MMLookup(args[0]);
+		options->metering = args[0];
+		
+		options->metering_index = new_mm_index;
+
+		options->videoOptions.metering = args[0];
+		
+		options->videoOptions.metering_index = new_mm_index;
+
+		options->stillOptions.metering = args[0];
+		
+		options->stillOptions.metering_index = new_mm_index;
+
+		options->previewOptions.metering = args[0];
+		
+		options->previewOptions.metering_index = new_mm_index;
+
+		//options->videoOptions.Print();
+    StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+  
 	void co_handle(std::vector<std::string> args)
 	{
 		if (args.size() != 1)
@@ -404,6 +436,30 @@ public:
 		options->brightness = normalized_brightness;
 
 		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+
+	void ec_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `ec` command");
+		
+		auto options = GetOptions();
+		float ev_comp = -1;
+		try{
+			ev_comp = stof(args[0]);
+			ev_comp = std::max(-10.0f, std::min(ev_comp, 10.0f));
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
+			return;
+		} 
+
+		options->ev = ev_comp;
+
+		//options->videoOptions.Print();
+    StopCamera();
 		Teardown();
 		Configure(options);
 		StartCamera();

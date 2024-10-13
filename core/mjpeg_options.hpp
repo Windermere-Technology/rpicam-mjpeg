@@ -184,6 +184,7 @@ struct MjpegOptions : public Options
 		flip_ = value;
 		updateTransform();
 	}
+
 private:
 	libcamera::Transform rot_;
 	libcamera::Transform flip_;
