@@ -341,6 +341,11 @@ public:
 			LOG(1, e.what());
 			return;
 		}
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
 	}
 	
 	void px_handle(std::vector<std::string> args)
@@ -393,7 +398,7 @@ public:
 		options->previewOptions.metering = args[0];
 		options->previewOptions.metering_index = new_mm_index;
 		//options->videoOptions.Print();
-    	StopCamera();
+		StopCamera();
 		Teardown();
 		Configure(options);
 		StartCamera();
