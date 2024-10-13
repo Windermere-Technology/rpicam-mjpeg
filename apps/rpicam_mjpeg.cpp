@@ -323,9 +323,17 @@ public:
 			throw std::runtime_error("expected exactly one argument to `wb` command");
 
 		std::string awb = args[0];
-		// NOTE: This will throw if we got an unhandled value.
 		auto options = GetOptions();
-		options->SetAwb(awb);
+		try
+		{
+			options->SetAwb(awb);
+		}
+		catch (const std::exception &e)
+		{
+			// We got some AWB value which libcamera does not support; ignore the command.
+			LOG(1, e.what());
+			return;
+		}
 
 		StopCamera();
 		Teardown();
