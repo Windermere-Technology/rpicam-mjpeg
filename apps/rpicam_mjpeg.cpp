@@ -68,6 +68,7 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["sc"] = std::bind(&RPiCamMjpegApp::set_counts, this);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -368,8 +369,8 @@ public:
 
 		jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
 		LOG(1, "Saved still capture: " + output_filename);
-		image_count++;
 		thumbnail_save(output_filename, 'i');
+		image_count++;
 	};
 
 	// video_save function using app to manage encoder and file output
@@ -416,10 +417,9 @@ public:
 
 	void set_counts()
 	{
-		const std::string thumbnail_suffix = ".th.jpg";
 		MjpegOptions *options = GetOptions();
 
-		auto get_highest_by_type = [&thumbnail_suffix](std::string filename, std::string types) {
+		auto get_highest_by_type = [](std::string filename, std::string types) {
 			auto base = filename.substr(0, filename.rfind("/"));
 
 			std::vector<std::string> filenames;
