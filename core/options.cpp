@@ -382,6 +382,30 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 	std::ifstream ifs(config_file.c_str());
 	if (ifs)
 	{
+		// Read contents of input file stream (ifs)
+		// Replace <key> <value> with <key>=<value> to comply with parse_config_files
+		// Any line that follows the <key>=<value> format will be parsed as normal,
+		//	unless it contains spaces within the value field, the first of which will
+		//	be replaced.
+		std::stringstream modifiedFile;
+		std::string line;
+
+		if (ifs.is_open()) {
+			while (std::getline(ifs, line)) {
+				// Finds first space in each line only
+				size_t space_pos = line.find(' ');
+				// npos indicates end of string
+				if (space_pos != std::string::npos) {
+					// Replace the first space with an equal sign
+					line[space_pos] = '=';
+				}
+				modifiedFile << line << '\n';  // Add modified line to the stringstream
+			}
+		} 
+		else {
+			std::cerr << "Unable to open file" << std::endl;
+		}
+
 		store(parse_config_file(ifs, options_), vm);
 		notify(vm);
 	}
