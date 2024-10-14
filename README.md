@@ -177,7 +177,7 @@ On terminal a:
 On terminal b:
 ```bash
 echo 'ca 1 30' > /tmp/FIFO
-echo 'ag 1 1' > /tmp/FIFO
+echo 'ag 100 100' > /tmp/FIFO
 ```
 To change red and blue gain during video recording;
 
