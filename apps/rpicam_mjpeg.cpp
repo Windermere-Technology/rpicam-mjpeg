@@ -65,10 +65,15 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["wb"] = std::bind(&RPiCamMjpegApp::wb_handle, this, std::placeholders::_1);
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
 		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
 		commands["ag"] = std::bind(&RPiCamMjpegApp::ag_handle, this, std::placeholders::_1);
 		commands["is"] = std::bind(&RPiCamMjpegApp::is_handle, this, std::placeholders::_1);
+		commands["px"] = std::bind(&RPiCamMjpegApp::px_handle, this, std::placeholders::_1); // video resolution
+		commands["co"] = std::bind(&RPiCamMjpegApp::co_handle, this, std::placeholders::_1);
+		commands["br"] = std::bind(&RPiCamMjpegApp::br_handle, this, std::placeholders::_1);
+		commands["sa"] = std::bind(&RPiCamMjpegApp::sa_handle, this, std::placeholders::_1);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -113,6 +118,7 @@ public:
 		std::ofstream stream(status_output);
 		stream << status();
 	}
+
 
 	void Configure(MjpegOptions *options)
 	{
@@ -236,7 +242,7 @@ public:
 			throw std::runtime_error("unsupported rotation value: " + args[0]);
 
 		auto options = GetOptions();
-		options->rot(rot);
+		options->SetRotation(rot);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
@@ -264,7 +270,7 @@ public:
 			flip = Transform::HFlip * flip;
 		if (vflip)
 			flip = Transform::VFlip * flip;
-		options->flip(flip);
+		options->SetFlip(flip);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
@@ -318,6 +324,67 @@ public:
 		StartCamera();
 	}
 
+	void wb_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly one argument to `wb` command");
+
+		std::string awb = args[0];
+		auto options = GetOptions();
+		try
+		{
+			options->SetAwb(awb);
+		}
+		catch (const std::exception &e)
+		{
+			// We got some AWB value which libcamera does not support; ignore the command.
+			LOG(1, e.what());
+			return;
+		}
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+	
+	void px_handle(std::vector<std::string> args)
+	{
+		if (args.size() < 7) // Expecting at least 7 arguments
+			throw std::runtime_error("Expected 7 arguments to `px` command: width height video_fps preview_fps image_width image_height frame_divider");
+
+		// Parse the arguments
+		int videoWidth = std::stoi(args[0]);     // Video width
+		int videoHeight = std::stoi(args[1]);    // Video height
+		int videoFps = std::stoi(args[2]);       // Video FPS
+		int previewFps = std::stoi(args[3]);     // Preview FPS
+		int imageWidth = std::stoi(args[4]);     // Image (still capture) width
+		int imageHeight = std::stoi(args[5]);    // Image (still capture) height
+		int frameDivider = std::stoi(args[6]);   // Frame divider
+
+		// Set the video and image resolution in the options
+		auto options = GetOptions();
+		options->videoOptions.width = videoWidth;
+		options->videoOptions.height = videoHeight;
+		options->videoOptions.fps = videoFps;    // Set video FPS
+		
+		options->frameDivider = frameDivider;    // Optional: Handle this as needed
+
+		// Log the parsed values for debugging
+		LOG(1, "px command received: video=" << videoWidth << "x" << videoHeight 
+			<< ", video FPS=" << videoFps << ", preview FPS=" << previewFps 
+			<< ", image=" << imageWidth << "x" << imageHeight 
+			<< ", frame divider=" << frameDivider);
+
+		// Reconfigure the camera with the new resolution
+		StopCamera();    // Stop the camera
+		Teardown();      // Clean up the current configuration
+		Configure(options); // Apply the new configuration with the updated resolution
+		StartCamera();   // Restart the camera with the new settings
+	}
+
 	void mm_handle(std::vector<std::string> args){
 		if (args.size() != 1)
 			throw std::runtime_error("Expected only one argument for `mm` command");
@@ -325,7 +392,6 @@ public:
 		auto options = GetOptions();
 		auto new_mm_index = Options::MMLookup(args[0]);
 		options->metering = args[0];
-		
 		options->metering_index = new_mm_index;
 		options->videoOptions.metering = args[0];
 		options->videoOptions.metering_index = new_mm_index;
@@ -333,7 +399,6 @@ public:
 		options->stillOptions.metering_index = new_mm_index;
 		options->previewOptions.metering = args[0];
 		options->previewOptions.metering_index = new_mm_index;
-
 		//options->videoOptions.Print();
 
 		StopCamera();
@@ -341,6 +406,59 @@ public:
 		Configure(options);
 		StartCamera();
 	}
+  
+	void co_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected at most 1 argument to `co` command");
+
+		float contrast = std::stof(args[0]);  // Use float for contrast
+
+		float normalized_contrast;
+
+		if (contrast < 0.0f) {
+			// If contrast is less than 0, map it to the range [0, 1]
+			normalized_contrast = (contrast + 100.0f) * (1.0f / 100.0f);
+		} else if (contrast == 0.0f) {
+			// If contrast is 0, set it to 1
+			normalized_contrast = 1.0f;
+		} else {
+			// If contrast is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_contrast = 1 + (contrast * 14.99f) / 100.0f;
+		}
+
+		auto options = GetOptions();
+		options->contrast = std::clamp(normalized_contrast, 0.0f, 15.99f);
+		LOG(1, "Contrast updated to: " << options->contrast);  // Log the updated contrast value
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void br_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `br` command");
+
+		float brightness = std::stof(args[0]);  // Use float for brightness
+
+		// Clamp brightness to the valid range [0, 100]
+		brightness = std::max(0.0f, std::min(brightness, 100.0f));
+
+		// Convert brightness to the range [-1.0f, 1.0f]
+		float normalized_brightness = (brightness / 50.0f) - 1.0f;
+
+		auto options = GetOptions();
+		options->brightness = normalized_brightness;
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
 
 	void ec_handle(std::vector<std::string> args){
 		if (args.size() != 1)
@@ -416,6 +534,57 @@ public:
 		options->gain = new_gain/100;
 
 		//options->videoOptions.Print();
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+	
+	void sa_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected at most 1 argument to `sa` command");
+
+		float saturation = std::stof(args[0]);  // Use float for contrast
+
+		float normalized_saturation;
+
+		if (saturation < 0.0f) {
+			// If saturation is less than 0, map it to the range [0, 1]
+			normalized_saturation = (saturation + 100.0f) * (1.0f / 100.0f);
+		} else if (saturation == 0.0f) {
+			// If saturation is 0, set it to 1
+			normalized_saturation = 1.0f;
+		} else {
+			// If saturation is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_saturation = 1 + (saturation * 14.99f) / 100.0f;
+		}
+
+		auto options = GetOptions();
+		options->saturation = std::clamp(normalized_saturation, 0.0f, 15.99f);
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void ss_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `ss` command");
+
+		int shutter_speed = std::stoi(args[0]);  
+		if (shutter_speed < 0)
+			shutter_speed = 0;  // keep shutter speed to a positive value
+
+		auto options = GetOptions();
+
+		// Convert the shutter speed to a string and pass it to the set method
+		options->shutter.set(std::to_string(shutter_speed));
+
+		LOG(1, "Shutter speed updated to: " << shutter_speed << " microseconds");
+
 		StopCamera();
 		Teardown();
 		Configure(options);
@@ -518,7 +687,8 @@ std::vector<std::string> tokenizer(const std::string& str, const std::string& de
     return tokens;
 }
 	
- 
+
+
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -565,6 +735,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				std::cout << "Invalid command: " << tokens[0] << std::endl;
 			}
+
 		}
 
 		app.WriteStatus();
@@ -656,7 +827,6 @@ static void event_loop(RPiCamMjpegApp &app)
 			StreamInfo video_info = app.GetStreamInfo(video_stream);
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
 			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
-
 			if (app.video_active)
 			{
 				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
@@ -668,15 +838,17 @@ static void event_loop(RPiCamMjpegApp &app)
 	}
 }
 
+
+
 int main(int argc, char *argv[])
 {	
 	std::signal(SIGINT, signal_handler); // deal with SIGINT
 	try
 	{
-         // Initialize the resolution checker and print available video modes - for future use
-        CameraResolutionChecker checker;
-        std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
-        std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
+        //  // Initialize the resolution checker and print available video modes - for future use
+        // CameraResolutionChecker checker;
+        // std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
+        // std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
 
 		RPiCamMjpegApp app;
 		try
