@@ -93,12 +93,8 @@ void MotionDetectStage::Configure()
 {
 	StreamInfo info;
 	stream_ = app_->LoresStream(&info);
-	
-
 	if (!stream_)
-	{
 		return;
-	}
 
 	config_.hskip = std::max(config_.hskip, 1);
 	config_.vskip = std::max(config_.vskip, 1);
@@ -127,8 +123,6 @@ void MotionDetectStage::Configure()
 	previous_frame_.resize(roi_width_ * roi_height_);
 	first_time_ = true;
 	motion_detected_ = false;
-
-	LOG(1, "succesfully configured");
 }
 
 bool MotionDetectStage::Process(CompletedRequestPtr &completed_request)
@@ -187,7 +181,7 @@ bool MotionDetectStage::Process(CompletedRequestPtr &completed_request)
 	motion_detected_ = motion_detected;
 	completed_request->post_process_metadata.Set("motion_detect.result", motion_detected);
 
-	return motion_detected;
+	return false;
 }
 
 static PostProcessingStage *Create(RPiCamApp *app)
