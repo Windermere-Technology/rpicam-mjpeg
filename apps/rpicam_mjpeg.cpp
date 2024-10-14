@@ -372,11 +372,12 @@ public:
 		float ag_red = -1;
 		float ag_blue = -1;
 		try{
-			ag_red = stof(args[0]);
-			ag_blue = stof(args[1]);
+			ag_red = stof(args[0])/100;
+			ag_blue = stof(args[1])/100;
 			if (ag_red < 0 || ag_blue < 0){
 				throw std::invalid_argument("Negative values are not allowed.");
 			}
+			// options requires the sum of red and blue gain to be 2.0 although not doing it doesn't create issues
 			//float epsilon = 0.00001f;
 			//if ((ag_red + ag_blue - 2.0f) > epsilon) {
 			//	throw std::invalid_argument("The sum of red gain and blue gain must be 2.0");
@@ -403,18 +404,18 @@ public:
 			throw std::runtime_error("Expected only one argument for `is` command");
 		
 		auto options = GetOptions();
-		float gain = -1;
+		float new_gain = -1;
 		try{
-			gain = stof(args[0]);
-			gain = std::max(100.0f, std::min(gain, 2000.0f));
+			new_gain = stof(args[0]);
+			new_gain = std::max(100.0f, std::min(new_gain, 2000.0f));
 		} catch (const std::invalid_argument &e) {
 			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
 			return;
 		} 
+		//according to the Raspicam-app github issue #349 iso/100 = gain
+		options->gain = new_gain/100;
 
-		options->gain = gain/100;
-
-		options->videoOptions.Print();
+		//options->videoOptions.Print();
 		StopCamera();
 		Teardown();
 		Configure(options);
