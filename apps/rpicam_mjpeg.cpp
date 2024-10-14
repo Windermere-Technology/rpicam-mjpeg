@@ -68,6 +68,8 @@ public:
 		commands["wb"] = std::bind(&RPiCamMjpegApp::wb_handle, this, std::placeholders::_1);
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
 		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
+		commands["ag"] = std::bind(&RPiCamMjpegApp::ag_handle, this, std::placeholders::_1);
+		commands["is"] = std::bind(&RPiCamMjpegApp::is_handle, this, std::placeholders::_1);
 		commands["px"] = std::bind(&RPiCamMjpegApp::px_handle, this, std::placeholders::_1); // video resolution
 		commands["co"] = std::bind(&RPiCamMjpegApp::co_handle, this, std::placeholders::_1);
 		commands["br"] = std::bind(&RPiCamMjpegApp::br_handle, this, std::placeholders::_1);
@@ -398,6 +400,7 @@ public:
 		options->previewOptions.metering = args[0];
 		options->previewOptions.metering_index = new_mm_index;
 		//options->videoOptions.Print();
+
 		StopCamera();
 		Teardown();
 		Configure(options);
@@ -472,6 +475,63 @@ public:
 		} 
 
 		options->ev = ev_comp;
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void ag_handle(std::vector<std::string> args){
+		if (args.size() != 2)
+			throw std::runtime_error("Expected only two arguments for `ag` command");
+		
+		auto options = GetOptions();
+		float ag_red = -1;
+		float ag_blue = -1;
+		try{
+			ag_red = stof(args[0])/100;
+			ag_blue = stof(args[1])/100;
+			if (ag_red < 0 || ag_blue < 0){
+				throw std::invalid_argument("Negative values are not allowed.");
+			}
+			// options requires the sum of red and blue gain to be 2.0 although not doing it doesn't create issues
+			//float epsilon = 0.00001f;
+			//if ((ag_red + ag_blue - 2.0f) > epsilon) {
+			//	throw std::invalid_argument("The sum of red gain and blue gain must be 2.0");
+			//}
+				
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: One of the values is not a valid positive number." << std::endl;
+			return;
+		} 
+		std::string ag_br =  std::to_string(ag_red) + "," + std::to_string(ag_blue);
+		options->awbgains = ag_br;
+		options->awb_gain_r = ag_red;
+		options->awb_gain_b = ag_blue;
+
+		//options->videoOptions.Print();
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void is_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `is` command");
+		
+		auto options = GetOptions();
+		float new_gain = -1;
+		try{
+			new_gain = stof(args[0]);
+			new_gain = std::max(100.0f, std::min(new_gain, 2000.0f));
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
+			return;
+		} 
+		//according to the Raspicam-app github issue #349 iso/100 = gain
+		options->gain = new_gain/100;
 
 		//options->videoOptions.Print();
 		StopCamera();
