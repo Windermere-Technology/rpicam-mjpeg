@@ -85,13 +85,13 @@ At this stage, the subcommands are not configured to run concurrently:
 mkFIFO /tmp/schedulerFIFO
 ```
 * This acts the scheduler's FIFO file we will be writing into. 
-> **NOTE: Alternatively, we can `touch /tmp/schedulerFIFO.log` for a text file that we can open for testing purpose.**
+> **NOTE: Alternatively, we can `touch /tmp/schedulerFIFO.log` for a text file for testing purpose.**
 
 ```bash
 ./build/apps/rpicam-mjpeg --motion-detect 1 --lores-width 128 --lores-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/schedulerFIFO
 ```
 * `./build/apps/rpicam-mjpeg --motion-detect 1 --lores-width 128 --lores-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/FIFO` will trigger motion detection.
-  - log "1" to scheduler FIFO if motion starts, "0" if it stops.
+  - Log "1" to scheduler FIFO if motion starts, "0" if it stops.
 
 ### 5. Multi Stream
 ```bash
@@ -175,7 +175,7 @@ To start trigger motion detection.
 echo 'mv 0' > /tmp/schedulerFIFO
 ```
 To stop trigger motion detection. 
-- `0`: starts the motion detection
+- `0`: stops the motion detection
 
 ---
 
