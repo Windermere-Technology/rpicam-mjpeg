@@ -74,6 +74,8 @@ public:
 		commands["co"] = std::bind(&RPiCamMjpegApp::co_handle, this, std::placeholders::_1);
 		commands["br"] = std::bind(&RPiCamMjpegApp::br_handle, this, std::placeholders::_1);
 		commands["sa"] = std::bind(&RPiCamMjpegApp::sa_handle, this, std::placeholders::_1);
+		commands["qu"] = std::bind(&RPiCamMjpegApp::qu_handle, this, std::placeholders::_1);
+		commands["bi"] = std::bind(&RPiCamMjpegApp::bi_handle, this, std::placeholders::_1);
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -590,7 +592,59 @@ public:
 		Configure(options);
 		StartCamera();
 	}
-};
+
+	void qu_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `qu` command");
+	
+		float quality = std::stof(args[0]);  // Use float for quality
+	
+		// Clamp quality to the valid range [0, 100]
+		quality = std::max(0.0f, std::min(quality, 100.0f));
+	
+		float normalized_quality;
+	
+		if (quality <= 10.0f) {
+			// Map quality from [0, 10] to [60, 85]
+			normalized_quality = 60.0f + (quality * 2.5f);
+		} else {
+			// Map quality from [10, 100] to [85, 100]
+			normalized_quality = 85.0f + ((quality - 10.0f) * (15.0f / 90.0f));
+		}
+	
+		auto options = GetOptions();
+		options->stillOptions.quality = std::clamp(normalized_quality, 60.0f, 100.0f);
+	
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void bi_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `bi` command");
+	
+		int bitrate = std::stoi(args[0]);  // Use int for bitrate
+	
+		// Ensure bitrate is non-negative
+		if (bitrate < 0)
+			bitrate = 0;
+	
+		// Clamp bitrate to the valid range [0, 25000000]
+		bitrate = std::min(bitrate, 25000000);
+	
+		auto options = GetOptions();
+		options->videoOptions.bitrate.set(std::to_string(bitrate) + "bps");
+	
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}	
+	};
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
 						 libcamera::ControlList const &metadata, std::string const &filename,
