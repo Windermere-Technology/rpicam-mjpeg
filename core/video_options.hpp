@@ -88,6 +88,8 @@ struct VideoOptions : public Options
 		options_.add_options()
 			("bitrate,b", value<std::string>(&bitrate_)->default_value("0bps"),
 			 "Set the video bitrate for encoding. If no units are provided, default to bits/second.")
+			("fps,f", value<unsigned int>(&fps)->default_value(30), // Add fps parsing
+             "Set the video frames per second (fps). Default is 30.")
 			("profile", value<std::string>(&profile),
 			 "Set the encoding profile")
 			("level", value<std::string>(&level),
@@ -166,6 +168,7 @@ struct VideoOptions : public Options
 	Bitrate bitrate;
 	std::string profile;
 	std::string level;
+	unsigned int fps;
 	unsigned int intra;
 	bool inline_headers;
 	std::string codec;
@@ -246,6 +249,7 @@ struct VideoOptions : public Options
 	{
 		Options::Print();
 		std::cerr << "    bitrate: " << bitrate.kbps() << "kbps" << std::endl;
+		std::cerr << "    fps: " << fps << std::endl; // Print fps
 		std::cerr << "    profile: " << profile << std::endl;
 		std::cerr << "    level:  " << level << std::endl;
 		std::cerr << "    intra: " << intra << std::endl;

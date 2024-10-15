@@ -177,8 +177,54 @@ echo 'mv 0' > /tmp/schedulerFIFO
 To stop trigger motion detection. 
 - `0`: stops the motion detection
 
----
+### 5: Metering
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+echo 'ca 1 30' > /tmp/FIFO
+echo 'mm centre' > /tmp/FIFO
+```
+To change metering option during video recording;
 
+### 5: Exposure compensation
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'ca 1 30' > /tmp/FIFO
+echo 'ec 5' > /tmp/FIFO
+```
+To change exposure during video recording, restricted between -10 to 10;
+
+### 6: Red and Blue gain
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'ca 1 30' > /tmp/FIFO
+echo 'ag 100 100' > /tmp/FIFO
+```
+To change red and blue gain during video recording;
+
+### 7: ISO
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'ca 1 30' > /tmp/FIFO
+echo 'is 1000' > /tmp/FIFO
+```
+To change iso during video recording;
+---
 Clean and Rebuild
 ---------------------
 

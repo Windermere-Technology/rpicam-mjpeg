@@ -311,11 +311,47 @@ Options::Options()
 	// This is really the best place to cache the platform, all components
 	// in rpicam-apps get the options structure;
 	platform_ = get_platform();
+
 }
 
 bool Options::Parse(int argc, char *argv[])
 {
 	return Options::Parse(argc, argv, nullptr);
+}
+
+int Options::AwbLookup(std::string awb)
+{
+	std::map<std::string, int> awb_table =
+		{ { "auto", libcamera::controls::AwbAuto },
+			{ "normal", libcamera::controls::AwbAuto },
+			{ "incandescent", libcamera::controls::AwbIncandescent },
+			{ "tungsten", libcamera::controls::AwbTungsten },
+			{ "fluorescent", libcamera::controls::AwbFluorescent },
+			{ "indoor", libcamera::controls::AwbIndoor },
+			{ "daylight", libcamera::controls::AwbDaylight },
+			{ "cloudy", libcamera::controls::AwbCloudy },
+			{ "custom", libcamera::controls::AwbCustom },
+			{ "sun", libcamera::controls::AwbDaylight },
+			// TODO: Handle "shade" & "flash" AWB modes (available in MMAL)?
+			// TODO: This doesn't feel great, but also there's no "off" in the AwbModeEnum
+			{ "off", -1 } };
+	if (awb_table.count(awb) == 0)
+		throw std::runtime_error("Invalid AWB mode: " + awb);
+	return awb_table[awb];
+}
+
+int Options::MMLookup(std::string meter)
+{
+	std::map<std::string, int> metering_table = { 
+		{ "centre", libcamera::controls::MeteringCentreWeighted },
+		{ "spot", libcamera::controls::MeteringSpot },
+		{ "average", libcamera::controls::MeteringMatrix },
+		{ "matrix", libcamera::controls::MeteringMatrix },
+		{ "custom", libcamera::controls::MeteringCustom } 
+		};
+	if (metering_table.count(meter) == 0)
+		throw std::runtime_error("Invalid metering mode: " + meter);
+	return metering_table[meter];
 }
 
 bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecognized)
@@ -630,19 +666,7 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 		throw std::runtime_error("Invalid afSpeed mode:" + afSpeed);
 	afSpeed_index = afSpeed_table[afSpeed];
 
-	std::map<std::string, int> awb_table =
-		{ { "auto", libcamera::controls::AwbAuto },
-			{ "normal", libcamera::controls::AwbAuto },
-			{ "incandescent", libcamera::controls::AwbIncandescent },
-			{ "tungsten", libcamera::controls::AwbTungsten },
-			{ "fluorescent", libcamera::controls::AwbFluorescent },
-			{ "indoor", libcamera::controls::AwbIndoor },
-			{ "daylight", libcamera::controls::AwbDaylight },
-			{ "cloudy", libcamera::controls::AwbCloudy },
-			{ "custom", libcamera::controls::AwbCustom } };
-	if (awb_table.count(awb) == 0)
-		throw std::runtime_error("Invalid AWB mode: " + awb);
-	awb_index = awb_table[awb];
+	awb_index = Options::AwbLookup(awb);
 
 	if (sscanf(awbgains.c_str(), "%f,%f", &awb_gain_r, &awb_gain_b) != 2)
 		throw std::runtime_error("Invalid AWB gains");

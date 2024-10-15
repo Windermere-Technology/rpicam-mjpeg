@@ -18,7 +18,7 @@ struct StillOptions : public Options
 		using namespace boost::program_options;
 		// clang-format off
 		options_.add_options()
-			("quality,q", value<int>(&quality)->default_value(93),
+			("quality,q", value<int>(&quality)->default_value(85),
 			 "Set the JPEG quality parameter")
 			("exif,x", value<std::vector<std::string>>(&exif),
 			 "Add these extra EXIF tags to the output file")
