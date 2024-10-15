@@ -17,7 +17,7 @@ Build
 sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev libavdevice-dev
 sudo apt install -y meson ninja-build
 ```
-4. Configure the rpicam-apps build
+2. Configure the rpicam-apps build
 For desktop-based operating systems like Raspberry Pi OS:
 ```bash
 meson setup build -Denable_libav=enabled -Denable_drm=enabled -Denable_egl=enabled -Denable_qt=enabled -Denable_opencv=disabled -Denable_tflite=disabled
@@ -26,7 +26,7 @@ meson setup build -Denable_libav=enabled -Denable_drm=enabled -Denable_egl=enabl
 > **NOTE: `meson setup` only needs to be run once.**
 
 
-5. Build rpicam-apps with the following command:
+3. Build rpicam-apps with the following command:
 ```bash
 meson compile -C build
 ```
@@ -80,7 +80,20 @@ At this stage, the subcommands are not configured to run concurrently:
   - **NOTE:** Terminating with Ctrl+C will result in a corrupt video.
   - Output video is saved in the `/tmp` directory.
 
-### 4. Multi Stream
+### 4. Motion Stream
+```bash
+mkFIFO /tmp/schedulerFIFO
+```
+* This acts the scheduler's FIFO file we will be writing into. 
+> **NOTE: Alternatively, we can `touch /tmp/schedulerFIFO.log` for a text file that we can open for testing purpose.**
+
+```bash
+./build/apps/rpicam-mjpeg --motion-detect 1 --lores-width 128 --lores-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/schedulerFIFO
+```
+* `./build/apps/rpicam-mjpeg --motion-detect 1 --lores-width 128 --lores-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/FIFO` will trigger motion detection.
+  - log "1" to scheduler FIFO if motion starts, "0" if it stops.
+
+### 5. Multi Stream
 ```bash
 ./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --preview-output /tmp/cam.jpg --preview-width 640 --preview-height 480
 ```
@@ -138,9 +151,31 @@ On terminal a:
 
 On terminal b:
 ```bash
-cho 'pv 1000 500' > /tmp/FIFO
+echo 'pv 1000 500' > /tmp/FIFO
 ```
 To set the size of preview window as 1000 x 500.
+
+### 4: Motion
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --motion-detect 1 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'mv 1 128 96 /tmp/schedulerFIFO' > /tmp/FIFO
+```
+To start trigger motion detection. 
+- `1`: starts the motion detection
+- `128`: lores-width
+- `96`: lores-height
+- `/tmp/schedulerFIFO`: the schedule FIFO we are writing to
+
+```bash
+echo 'mv 0' > /tmp/schedulerFIFO
+```
+To stop trigger motion detection. 
+- `0`: starts the motion detection
 
 ---
 
