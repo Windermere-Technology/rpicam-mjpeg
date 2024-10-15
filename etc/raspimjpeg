@@ -1,2 +1,9 @@
 # Configuration File
-viewfinder-width640
+viewfinder-width 640
+viewfinder-height 480
+
+width 640
+height 480
+
+hflip false
+vflip false
