@@ -343,6 +343,8 @@ public:
 			// relative parameter
 			options->lores_width = stoi(args[1]);
 			options->lores_height = stoi(args[2]);
+			options->scheduler_fifo = args[3];
+
 			options->post_process_file = "assets/motion_detect.json";
 			options->motion_detect = true;
 
@@ -431,7 +433,9 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 }
 
 // motion detect function
-static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request, std::string& filename)
+bool detected_ = false;
+bool detected = false;
+static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request, std::string &config, std::string &scheduler_fifo)
 {
 	// Create an instance of MotionDetectStage
 	static MotionDetectStage motionDetectStage(&app);
@@ -439,7 +443,7 @@ static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_re
 	if (app.firstTime && app.fifo_active())
 	{
 		boost::property_tree::ptree root;
-		boost::property_tree::read_json(filename, root);
+		boost::property_tree::read_json(config, root);
 		boost::property_tree::ptree params = root.get_child("motion_detect");
 		motionDetectStage.Read(params);
 		motionDetectStage.Configure();
@@ -447,6 +451,20 @@ static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_re
 	}
 
 	motionDetectStage.Process(completed_request);
+
+	completed_request->post_process_metadata.Get("motion_detect.result", detected);
+
+	std::string msg = detected ? "1" : "0";
+	static std::ofstream scheduler {scheduler_fifo};
+	
+	if (detected_ != detected) 
+	{
+		// LOG(1, "Motion " << (detected ? "detected" : "stopped"));
+		scheduler << msg << std::endl;
+		scheduler.flush();
+	}
+
+	detected_ = detected;
 }
 
 
@@ -613,7 +631,7 @@ static void event_loop(RPiCamMjpegApp &app)
 
 			if (app.motion_active)
 			{
-				motion_detect(app, completed_request, options->post_process_file);
+				motion_detect(app, completed_request, options->post_process_file, options->scheduler_fifo);
 				// LOG(1, "FIFO correctly set");
 			}
 		}

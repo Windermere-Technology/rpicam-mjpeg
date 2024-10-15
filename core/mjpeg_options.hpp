@@ -17,6 +17,7 @@ struct MjpegOptions : public Options
 {
 
 	bool motion_detect;
+	std:: string scheduler_fifo;
 
 	MjpegOptions() : Options()
 	{
@@ -62,6 +63,7 @@ struct MjpegOptions : public Options
 				"Set the status output file name")
 			("motion-detect", value<bool>(&motion_detect),
 				"Turn on Motion Detection")
+			("scheduler-fifo", value<std::string>(&scheduler_fifo), "The path to the Scheduler FIFO")
 			;
 		// clang-format on
 	}
