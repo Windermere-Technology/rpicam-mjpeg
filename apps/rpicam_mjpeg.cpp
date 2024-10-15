@@ -76,6 +76,8 @@ public:
 		commands["sa"] = std::bind(&RPiCamMjpegApp::sa_handle, this, std::placeholders::_1);
 		commands["qu"] = std::bind(&RPiCamMjpegApp::qu_handle, this, std::placeholders::_1);
 		commands["bi"] = std::bind(&RPiCamMjpegApp::bi_handle, this, std::placeholders::_1);
+		commands["sh"] = std::bind(&RPiCamMjpegApp::sh_handle, this, std::placeholders::_1);
+
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -644,6 +646,36 @@ public:
 		Configure(options);
 		StartCamera();
 	}	
+
+	void sh_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected at most 1 argument to `sh` command");
+
+		float sharpness = std::stof(args[0]);  // Use float for contrast
+
+		float normalized_sharpness;
+
+		if (sharpness < 0.0f) {
+			// If sharpness is less than 0, map it to the range [0, 1]
+			normalized_sharpness = (sharpness + 100.0f) * (1.0f / 100.0f);
+		} else if (sharpness == 0.0f) {
+			// If sharpness is 0, set it to 1
+			normalized_sharpness = 1.0f;
+		} else {
+			// If sharpness is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_sharpness = 1 + (sharpness * 14.99f) / 100.0f;
+		}
+
+		auto options = GetOptions();
+		options->sharpness = std::clamp(normalized_sharpness, 0.0f, 15.99f);
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
 	};
 
 static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
