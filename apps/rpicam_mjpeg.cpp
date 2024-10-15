@@ -750,32 +750,11 @@ public:
 						libcamera::ControlList const &metadata, libcamera::Size outputSize)
 	{
 		StillOptions const *options = &GetOptions()->stillOptions;
-		// TODO: Is this needed?
 		std::string const filename = make_name(options->output);
 		std::string const &cam_model = CameraModel();
-
-		// Add the datetime to the filename.
-		std::string output_filename;
-		{
-			// The part before the extension (if one exists)
-			size_t period_index = filename.rfind(".");
-			if (period_index == std::string::npos)
-				period_index = filename.length();
-			std::string name = filename.substr(0, period_index);
-			std::time_t now = std::time(nullptr);
-			// The date/timestamp
-			std::stringstream buffer;
-			buffer << std::put_time(std::localtime(&now), "%Y%m%d%H%M%S"); // Use &now instead of &t
-			std::string timestamp = buffer.str(); // Get the string from the buffer
-
-			// Extension
-			std::string extension = filename.substr(period_index, filename.length());
-			output_filename = name + timestamp + extension;
-		}
-
-		jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
-		LOG(1, "Saved still capture: " + output_filename);
-		thumbnail_save(output_filename, 'i');
+		jpeg_save(mem, info, metadata, filename, cam_model, options, outputSize.width, outputSize.height);
+		LOG(1, "Saved still capture: " + filename);
+		thumbnail_save(filename, 'i');
 		image_count++;
 	};
 
