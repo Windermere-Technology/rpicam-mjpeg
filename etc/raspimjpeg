@@ -1,9 +1,31 @@
 # Configuration File
+
+# Viewfinder Options
 viewfinder-width 640
 viewfinder-height 480
 
-width 640
-height 480
+preview-width 640
 
-hflip false
-vflip false
+
+#
+# Preview Options
+#
+# fps_preview = video_fps (below) / divider
+#
+width 512
+quality 10
+divider 1
+
+#
+# Video Options
+#
+video_width 1920
+video_height 1080
+video_fps 25
+fps_divider 1
+video_bitrate 17000000
+video_buffer 0
+#h264_buffer_size 0 sets to default (65536) Higher gives smoother set of callbacks
+h264_buffer_size 131072
+h264_buffers 0
+video_split 0

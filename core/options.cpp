@@ -406,7 +406,7 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 			std::cerr << "Unable to open file" << std::endl;
 		}
 
-		store(parse_config_file(modifiedFile, options_), vm);
+		store(parse_config_file(modifiedFile, options_,true), vm);
 		notify(vm);
 	}
 
