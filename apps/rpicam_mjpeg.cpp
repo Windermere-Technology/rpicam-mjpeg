@@ -138,11 +138,11 @@ public:
 			// Call the multi-stream configuration function
 			ConfigureMultiStream(options->stillOptions, options->videoOptions, options->previewOptions, 0);
 		}
-		else if (video_active || motion_active)
+		else if (video_active)
 		{
 			ConfigureVideo();
 		}
-		else if (preview_active || still_active)
+		else if (preview_active || still_active || motion_active)
 		{
 			ConfigureViewfinder();
 		}
@@ -343,9 +343,9 @@ public:
 					cleanup();
 			motion_active = false;
 		}
-		else if (args.size() < 4)
+		else if (args.size() < 2)
 		{
-			throw std::runtime_error("Expected four arguments to `mv` command");
+			throw std::runtime_error("Expected two arguments to `mv` command");
 		}
 		else
 		{
@@ -354,10 +354,9 @@ public:
 			auto options = GetOptions();
 			
 			// relative parameter
-			options->lores_width = stoi(args[1]);
-			options->lores_height = stoi(args[2]);
-			options->scheduler_fifo = args[3];
+			options->scheduler_fifo = args[1];
 
+			// FIXME: dont use the motion_detect.json anymore? 
 			options->post_process_file = "assets/motion_detect.json";
 			options->motion_detect = true;
 
@@ -771,8 +770,9 @@ static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_re
 {
 	// Create an instance of MotionDetectStage
 	static MotionDetectStage motionDetectStage(&app);
+	motionDetectStage.UseViewfinder(true);
 	
-	if (app.firstTime && app.fifo_active())
+	if (app.firstTime && app.motion_active)
 	{
 		boost::property_tree::ptree root;
 		boost::property_tree::read_json(config, root);
@@ -791,9 +791,7 @@ static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_re
 	
 	if (detected_ != detected) 
 	{
-		// LOG(1, "Motion " << (detected ? "detected" : "stopped"));
 		scheduler << msg << std::endl;
-		scheduler.flush();
 	}
 
 	detected_ = detected;
@@ -953,6 +951,11 @@ static void event_loop(RPiCamMjpegApp &app)
 							 app.CameraModel(), &opts);
 				LOG(2, "Viewfinder (Preview) image saved");
 			}
+			if (app.motion_active)
+			{
+				motion_detect(app, completed_request, options->post_process_file, options->scheduler_fifo);
+				// LOG(1, "FIFO correctly set");
+			}
 		}
 
 		// Process the VideoRecording stream
@@ -968,12 +971,6 @@ static void event_loop(RPiCamMjpegApp &app)
 				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
 						   app.CameraModel(), options->videoOptions, completed_request, video_stream);
 				LOG(2, "Video recorded and saved");
-			}
-
-			if (app.motion_active)
-			{
-				motion_detect(app, completed_request, options->post_process_file, options->scheduler_fifo);
-				// LOG(1, "FIFO correctly set");
 			}
 		}
 		LOG(2, "Request processing completed, current status: " + app.status());

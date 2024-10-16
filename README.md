@@ -83,14 +83,15 @@ At this stage, the subcommands are not configured to run concurrently:
 ### 4. Motion Stream
 ```bash
 mkFIFO /tmp/schedulerFIFO
+cat /tmp/schedulerFIFO
 ```
 * This acts the scheduler's FIFO file we will be writing into. 
-> **NOTE: Alternatively, we can `touch /tmp/schedulerFIFO.log` for a text file for testing purpose.**
+* `cat` to see the updates in the file
 
 ```bash
-./build/apps/rpicam-mjpeg --motion-detect 1 --lores-width 128 --lores-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/schedulerFIFO
+./build/apps/rpicam-mjpeg --motion-detect 1 --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/schedulerFIFO
 ```
-* `./build/apps/rpicam-mjpeg --motion-detect 1 --lores-width 128 --lores-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/FIFO` will trigger motion detection.
+* `./build/apps/rpicam-mjpeg --motion-detect 1 --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/schedulerFIFO` will trigger motion detection.
   - Log "1" to scheduler FIFO if motion starts, "0" if it stops.
 
 ### 5. Multi Stream
@@ -163,18 +164,17 @@ On terminal a:
 
 On terminal b:
 ```bash
-echo 'mv 1 128 96 /tmp/schedulerFIFO' > /tmp/FIFO
+echo 'mv 1 /tmp/schedulerFIFO' > /tmp/FIFO
 ```
-To start trigger motion detection. 
+To start motion detection. 
 - `1`: starts the motion detection
-- `128`: lores-width
-- `96`: lores-height
 - `/tmp/schedulerFIFO`: the schedule FIFO we are writing to
+> **NOTE: `cat` to see the updates**
 
 ```bash
 echo 'mv 0' > /tmp/schedulerFIFO
 ```
-To stop trigger motion detection. 
+To stop motion detection. 
 - `0`: stops the motion detection
 
 ### 5: Metering
