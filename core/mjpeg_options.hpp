@@ -63,7 +63,7 @@ struct MjpegOptions : public Options
 			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
 			("status-output", value<std::string>(&status_output)->default_value("/dev/shm/mjpeg/status_mjpeg.txt"),
 				"Set the status output file name")
-			("media-path", value<std::string>(&media_path)->implicit_value("/var/www/media"),
+			("media-path", value<std::string>(&media_path)->implicit_value("/var/www/html/media"),
 				"Set the media path for storing RPi_Cam_Web_Interface thumbnails")
 			("thumb-gen", value<std::string>(&thumb_gen)->default_value("vit")->implicit_value("vit"),
 				"Enable thumbnail generation for v(ideo), i(mages) and t(imelapse). (vit = video, image, timelapse enabled)")
