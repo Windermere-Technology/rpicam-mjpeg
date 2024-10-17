@@ -65,9 +65,6 @@ struct MjpegOptions : public Options
 				"Set the media path for storing RPi_Cam_Web_Interface thumbnails")
 			("thumb-gen", value<std::string>(&thumb_gen)->default_value("vit")->implicit_value("vit"),
 				"Enable thumbnail generation for v(ideo), i(mages) and t(imelapse). (vit = video, image, timelapse enabled)")
-			("motion-detect", value<bool>(&motion_detect),
-				"Turn on Motion Detection")
-			("scheduler-fifo", value<std::string>(&scheduler_fifo), "The path to the Scheduler FIFO")
 			("motion-output", value<std::string>(&motion_output), 
 				"The path to the Scheduler FIFO motion detection will output to.")
 			;
