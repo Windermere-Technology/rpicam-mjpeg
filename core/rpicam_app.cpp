@@ -647,24 +647,50 @@ void RPiCamApp::ConfigureMultiStream(StillOptions& stillOptions,
 {
     LOG(2, "=== Configuring multi-stream... ===");
 
-    //Stream roles
-    StreamRoles stream_roles = { StreamRole::Viewfinder, StreamRole::VideoRecording };
-    if (stillOptions.raw)
-        stream_roles.push_back(StreamRole::Raw);
+    // Stream roles
+    StreamRoles stream_roles = { StreamRole::Viewfinder, StreamRole::VideoRecording, StreamRole::Raw };
 
     if (!configuration_)
-		configuration_ = camera_->generateConfiguration(stream_roles);
+        configuration_ = camera_->generateConfiguration(stream_roles);
 
     if (!configuration_)
         throw std::runtime_error("failed to generate multi-stream configuration");
 
+    // Retrieve the maximum resolution supported by the camera
+    std::optional<libcamera::Size> max_size_opt = camera_->properties().get(libcamera::properties::PixelArraySize);
+    if (!max_size_opt) {
+        throw std::runtime_error("failed to get maximum resolution from camera properties");
+    }
+    auto &max_size = max_size_opt.value();
+	if (max_size.width > 8000 || max_size.height > 6000){
+		max_size.width = 8000; max_size.height = 6000;
+	}
+
+    // Calculate the aspect ratio of the maximum resolution
+    double max_ar = static_cast<double>(max_size.width) / max_size.height;
+
     // Configure the Preview Stream
     StreamConfiguration &viewfinder_cfg = configuration_->at(0);
     viewfinder_cfg.pixelFormat = libcamera::formats::YUV420;
-    if (previewOptions.width)
-        viewfinder_cfg.size.width = previewOptions.width;
-    if (previewOptions.height)
-        viewfinder_cfg.size.height = previewOptions.height;
+
+    {
+        // Set width from previewOptions, height according to aspect ratio of max resolution
+        unsigned int desired_width = previewOptions.width > 0 ? previewOptions.width : max_size.width;
+        libcamera::Size selected_size = viewfinder_cfg.size;
+        const libcamera::StreamFormats &formats = viewfinder_cfg.formats();
+        for (const auto &size : formats.sizes(libcamera::formats::YUV420)) {
+            if (size.width < desired_width)
+                continue;
+            double ar = static_cast<double>(size.width) / size.height;
+            if (fabs(ar - max_ar) > 0.01)
+                continue;
+            if (size.width < selected_size.width)
+                selected_size = size;
+        }
+        viewfinder_cfg.size = selected_size;
+        LOG(1, "Preview stream size set to " << selected_size.width << "x" << selected_size.height);
+    }
+
     if (previewOptions.buffer_count > 0)
         viewfinder_cfg.bufferCount = previewOptions.buffer_count;
     else
@@ -675,14 +701,30 @@ void RPiCamApp::ConfigureMultiStream(StillOptions& stillOptions,
     // Configure the Video Recording Stream
     StreamConfiguration &video_cfg = configuration_->at(1);
     video_cfg.pixelFormat = libcamera::formats::YUV420;
+
+    {
+        // Use 1920x1080 resolution unless videoOptions.width is specified
+        unsigned int desired_width = videoOptions.width > 0 ? videoOptions.width : 1920;
+        libcamera::Size selected_size = video_cfg.size;
+        const libcamera::StreamFormats &formats = video_cfg.formats();
+        for (const auto &size : formats.sizes(libcamera::formats::YUV420)) {
+            if (size.width < desired_width)
+                continue;
+            double ar = static_cast<double>(size.width) / size.height;
+            if (fabs(ar - max_ar) > 0.01)
+                continue;
+            if (size.width < selected_size.width)
+                selected_size = size;
+        }
+        video_cfg.size = selected_size;
+        LOG(1, "Video stream size set to " << selected_size.width << "x" << selected_size.height);
+    }
+
     if (videoOptions.buffer_count > 0)
         video_cfg.bufferCount = videoOptions.buffer_count;
     else
         video_cfg.bufferCount = 6;  // Default buffer count
-    if (videoOptions.width)
-        video_cfg.size.width = videoOptions.width;
-    if (videoOptions.height)
-        video_cfg.size.height = videoOptions.height;
+
     if (flags & FLAG_VIDEO_JPEG_COLOURSPACE)
         video_cfg.colorSpace = libcamera::ColorSpace::Sycc;
     else if (video_cfg.size.width >= 1280 || video_cfg.size.height >= 720)
@@ -693,20 +735,36 @@ void RPiCamApp::ConfigureMultiStream(StillOptions& stillOptions,
     post_processor_.AdjustConfig("video", &video_cfg);
 
     // Raw Stream for Still Capture
-    if (stillOptions.raw)
-    {
-        stillOptions.mode.update(video_cfg.size, stillOptions.framerate);
-        stillOptions.mode = selectMode(stillOptions.mode);
+    StreamConfiguration &raw_cfg = configuration_->at(2);
+    raw_cfg.pixelFormat = mode_to_pixel_format(stillOptions.mode);
 
-        StreamConfiguration &raw_cfg = configuration_->at(2);
-        raw_cfg.size = stillOptions.mode.Size();
-        raw_cfg.pixelFormat = mode_to_pixel_format(stillOptions.mode);
-        raw_cfg.bufferCount = video_cfg.bufferCount;
+    // {
+    //     // Use maximum resolution unless stillOptions.width is specified
+    //     unsigned int desired_width = stillOptions.width > 0 ? stillOptions.width : max_size.width;
+    //     libcamera::Size selected_size = raw_cfg.size;
+    //     const libcamera::StreamFormats &formats = raw_cfg.formats();
+    //     for (const auto &size : formats.sizes(raw_cfg.pixelFormat)) {
+    //         if (size.width < desired_width) continue;
+	// 		if (size.width > 8000) continue;
+    //         double ar = static_cast<double>(size.width) / size.height;
+    //         if (fabs(ar - max_ar) > 0.01)
+    //             continue;
+    //         if (size.width < selected_size.width)
+    //             selected_size = size;
+    //     }
+    //     raw_cfg.size = selected_size;
+    //     LOG(1, "Raw stream size set to " << selected_size.width << "x" << selected_size.height);
+    // }
 
-        configuration_->sensorConfig = libcamera::SensorConfiguration();
-        configuration_->sensorConfig->outputSize = stillOptions.mode.Size();
-        configuration_->sensorConfig->bitDepth = stillOptions.mode.bit_depth;
-    }
+    raw_cfg.bufferCount = video_cfg.bufferCount;
+
+    // Update stillOptions.mode with the selected size
+    stillOptions.mode.update(max_size, stillOptions.framerate);
+    stillOptions.mode = selectMode(stillOptions.mode);
+
+    configuration_->sensorConfig = libcamera::SensorConfiguration();
+    configuration_->sensorConfig->outputSize = stillOptions.mode.Size();
+    configuration_->sensorConfig->bitDepth = stillOptions.mode.bit_depth;
 
     // Set orientation
     configuration_->orientation = libcamera::Orientation::Rotate0 * stillOptions.transform;
@@ -718,8 +776,7 @@ void RPiCamApp::ConfigureMultiStream(StillOptions& stillOptions,
     // Map the streams
     streams_["viewfinder"] = viewfinder_cfg.stream();
     streams_["video"] = video_cfg.stream();
-    if (stillOptions.raw)
-        streams_["raw"] = configuration_->at(2).stream();
+    streams_["raw"] = raw_cfg.stream();
 
     post_processor_.Configure();
     LOG(2, "Multi-stream setup complete");
