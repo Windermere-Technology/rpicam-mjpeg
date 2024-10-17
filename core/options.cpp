@@ -398,6 +398,9 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 				if (space_pos != std::string::npos) {
 					// Replace the first space with an equal sign
 					line[space_pos] = '=';
+				} else {
+					LOG(1, "Skipped option" << line);
+					continue;
 				}
 				modifiedFile << line << '\n';  // Add modified line to the stringstream
 			}
@@ -406,7 +409,8 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 			std::cerr << "Unable to open file" << std::endl;
 		}
 
-		store(parse_config_file(modifiedFile, options_,true), vm);
+		store(parse_config_file(modifiedFile, options_, true), vm);
+		LOG(1, "Help " << options_);
 		notify(vm);
 	}
 
