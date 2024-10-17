@@ -203,7 +203,10 @@ public:
 		{
 			LOG(1, "Cleaning up file output...");
 			h264FileOutput.reset(); // Free the file output resources
-			thumbnail_save(GetOptions()->videoOptions.output, 'v');
+			auto options = GetOptions();
+			// NOTE: videoOptions.output contains the generate file name (make_name).
+			thumbnail_save(options->videoOptions.output, 'v');
+			options->videoOptions.output = "";
 			video_count++;
 		}
 	}
@@ -747,7 +750,8 @@ public:
 						libcamera::ControlList const &metadata, libcamera::Size outputSize)
 	{
 		StillOptions const *options = &GetOptions()->stillOptions;
-		std::string const filename = options->output;
+		// TODO: Is this needed?
+		std::string const filename = make_name(options->output);
 		std::string const &cam_model = CameraModel();
 
 		// Add the datetime to the filename.
@@ -780,11 +784,16 @@ public:
 				const libcamera::ControlList &metadata, const CompletedRequestPtr &completed_request,
 				Stream *stream)
 	{
-		VideoOptions &options = GetOptions()->videoOptions;
-		std::string const filename = options.output;
+		MjpegOptions *options = GetOptions();
+
+		// FIXME: This is a big ol' hack, since the Encoder family takes output file name from VideoOptions
+		// - We need to retain the original output name for future make_name calls.
+		// - We need to retain the result of make_name for future thumbnail_save calls.
+		if (options->videoOptions.output.empty())
+			options->videoOptions.output = make_name(options->video_output);
 
 		// Use the app instance to call initialize_encoder
-		initialize_encoder(options, info);
+		initialize_encoder(options->videoOptions, info);
 
 		// Check if the encoder and file output were successfully initialized
 		if (!h264Encoder)
@@ -891,8 +900,8 @@ public:
 			image_count = get_highest_by_type(options->stillOptions.output, "it") + 1;
 		}
 
-		if (!options->videoOptions.output.empty()) {
-			video_count = get_highest_by_type(options->videoOptions.output, "v") + 1;
+		if (!options->video_output.empty()) {
+			video_count = get_highest_by_type(options->video_output, "v") + 1;
 		}
 	}
 
@@ -929,6 +938,72 @@ public:
 
 		LOG(2, "Saved thumbnail to " << thumbnail_filename);
 	}
+
+	std::string make_name(const std::string format)
+	{
+		time_t tt = time(nullptr);
+		struct tm *ptm = localtime(&tt);
+
+		// TODO: We should support that mediapath shenanigans that RaspiMJPEG did!
+
+		std::stringstream buffer;
+		size_t pos, previous_pos = 0;
+
+		while ((pos = format.find('%', previous_pos)) != std::string::npos) {
+			// copy leading non format stuff.
+			buffer << format.substr(previous_pos, pos - previous_pos);
+
+			// Edge case: The string terminates in a %. 🙃
+			if (pos == format.size()) {
+				buffer << '%';
+				break;
+			}
+
+			switch (format[pos + 1])
+			{
+			case '%': // literal %
+			case 'Y': // 4 dig. year
+			case 'y': // 2 dig. year
+				buffer << std::put_time(ptm, format.substr(pos, 2).c_str());
+				break;
+			case 'M': // 2 dig. month
+				buffer << std::put_time(ptm, "%m");
+				break;
+			case 'D': // day of month
+				buffer << std::put_time(ptm, "%d");
+				break;
+			case 'h': // 24 hour
+				buffer << std::put_time(ptm, "%H");
+				break;
+			case 'm': // minute
+				buffer << std::put_time(ptm, "%M");
+				break;
+			case 's': // second
+				buffer << std::put_time(ptm, "%S");
+				break;
+			// TODO: We should support count_format config option for v, i, t
+			case 'v': // video #
+				buffer << std::to_string(video_count);
+				break;
+			case 'i': // image #
+			case 'l': // timelapse #
+				// FIXME: roberttidey RaspiMJPEG actually does use a lapse_cnt here...
+				buffer << std::to_string(image_count);
+				break;
+			default: // Fallback for unrecognized / unsupported
+				LOG(1, "Unsupported f-string: " << format.substr(pos, 2));
+				buffer << format.substr(pos, 2);
+			}
+
+			previous_pos = pos + 2; // advance past whatever we just substitued
+		}
+
+		// copy trailing non-format stuff.
+		if (previous_pos != format.size())
+			buffer << format.substr(previous_pos);
+
+		return buffer.str();
+	}
 };
 
 
@@ -961,7 +1036,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	// FIXME: app should probably know how to set these...
 	app.preview_active = !options->previewOptions.output.empty();
 	app.still_active = !options->stillOptions.output.empty();
-	app.video_active = !options->videoOptions.output.empty();
+	app.video_active = !options->video_output.empty();
 	app.motion_active = options->motion_detect;
 	app.multi_active = ((int)app.preview_active + (int)app.still_active + (int)app.video_active) > 1;
 
@@ -1124,7 +1199,7 @@ int main(int argc, char *argv[])
 				if (options->verbose >= 2)
 					options->Print();
 				if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
-					options->videoOptions.output.empty() && !options->motion_detect)
+					options->video_output.empty() && !options->motion_detect)
 					throw std::runtime_error(
 						"At least one of --preview-output, --still-output, --video-output, or --motion-detect should be provided.");
 

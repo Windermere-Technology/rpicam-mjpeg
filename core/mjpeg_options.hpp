@@ -43,7 +43,7 @@ struct MjpegOptions : public Options
 			("preview-width", value<unsigned int>(&previewOptions.width)->default_value(512)
 				->notifier(in(128, 1024, "preview-width")),
 				"Set the output preview width (min = 128, max = 1024)")
-			("video-output", value<std::string>(&videoOptions.output),
+			("video-output", value<std::string>(&video_output),
 				"Set the video output file name")
 			("video-width", value<unsigned int>(&videoOptions.width)->default_value(0),
 				"Set the output video width (0 = use default value)")
@@ -124,10 +124,12 @@ struct MjpegOptions : public Options
 		}
 
 		// Ensure at least one of --still-output, --video-output, or --preview-output is specified
-		if (stillOptions.output.empty() && previewOptions.output.empty() && videoOptions.output.empty() && !motion_detect)
+		if (stillOptions.output.empty() && previewOptions.output.empty() &&  video_output.empty() && !motion_detect)
 		{
 			throw std::runtime_error("At least one of --still-output, --preview-output, , --video-output, or --motion-detect should be provided.");
 		}
+
+		assert(videoOptions.output.empty() && "videoOptions.output should only be used by the Encoder family, and RPiCamMjpegApp should set it appropriate from video_output.");
 
 		// Error if any unrecognised flags were provided
 		if (unrecognized.size())
@@ -158,6 +160,8 @@ struct MjpegOptions : public Options
 		Options::SetApp(app);
 	}
 	unsigned int frameDivider;  // Declare frameDivider here
+
+	std::string video_output;
 	std::string fifo;
 	std::string status_output;
 	std::string media_path;
