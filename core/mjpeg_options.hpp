@@ -15,6 +15,10 @@
 
 struct MjpegOptions : public Options
 {
+
+	bool motion_detect;
+	std:: string scheduler_fifo;
+
 	MjpegOptions() : Options()
 	{
 		using namespace boost::program_options;
@@ -59,6 +63,9 @@ struct MjpegOptions : public Options
 			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
 			("status-output", value<std::string>(&status_output)->default_value("/dev/shm/mjpeg/status_mjpeg.txt"),
 				"Set the status output file name")
+			("motion-detect", value<bool>(&motion_detect),
+				"Turn on Motion Detection")
+			("scheduler-fifo", value<std::string>(&scheduler_fifo), "The path to the Scheduler FIFO")
 			;
 		// clang-format on
 	}
@@ -113,9 +120,9 @@ struct MjpegOptions : public Options
 		}
 
 		// Ensure at least one of --still-output, --video-output, or --preview-output is specified
-		if (stillOptions.output.empty() && previewOptions.output.empty() && videoOptions.output.empty())
+		if (stillOptions.output.empty() && previewOptions.output.empty() && videoOptions.output.empty() && !motion_detect)
 		{
-			throw std::runtime_error("At least one of --still-output, --video-output, or --preview-output should be provided.");
+			throw std::runtime_error("At least one of --still-output, --preview-output, , --video-output, or --motion-detect should be provided.");
 		}
 
 		// Error if any unrecognised flags were provided

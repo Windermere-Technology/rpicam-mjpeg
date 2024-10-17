@@ -8,6 +8,7 @@
 */
 #include <cassert>
 #include <chrono>
+#include <cstdio>
 #include <ctime>
 #include <iomanip>
 #include <string>
@@ -42,6 +43,9 @@
 //check camera resolution
 #include "cameraResolutionChecker.hpp"
 
+// motion detection
+#include "post_processing_stages/motion_detect_stage.cpp"
+
 using namespace std::placeholders;
 using libcamera::Stream;
 
@@ -65,6 +69,7 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["mv"] = std::bind(&RPiCamMjpegApp::mv_handle, this, std::placeholders::_1);
 		commands["wb"] = std::bind(&RPiCamMjpegApp::wb_handle, this, std::placeholders::_1);
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
 		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
@@ -91,6 +96,8 @@ public:
 	bool preview_active;
 	bool still_active;
 	bool video_active;
+	bool motion_active;
+	bool firstTime = true; 	// helper var for motion detect
 	// TODO: Remove this variable altogether... eventually
 	bool multi_active;
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
@@ -110,6 +117,8 @@ public:
 			return "video"; // recording
 		if (preview_active)
 			return "ready"; // preview only
+		if (motion_active)
+			return "motion"; // motion detection
 		return "halted"; // nothing
 	}
 
@@ -135,7 +144,7 @@ public:
 		{
 			ConfigureVideo();
 		}
-		else if (preview_active || still_active)
+		else if (preview_active || still_active || motion_active)
 		{
 			ConfigureViewfinder();
 		}
@@ -326,6 +335,38 @@ public:
 		Configure(options);
 		preview_active = true;
 		StartCamera();
+	}
+
+
+	void mv_handle(std::vector<std::string> args){
+		if (args.size() < 1 || args[0] != "1")
+		{ 
+			if (motion_active) 
+					cleanup();
+			motion_active = false;
+		}
+		else if (args.size() < 2)
+		{
+			throw std::runtime_error("Expected two arguments to `mv` command");
+		}
+		else
+		{
+			motion_active = true;	
+			firstTime = true;
+			auto options = GetOptions();
+			
+			// relative parameter
+			options->scheduler_fifo = args[1];
+
+			// FIXME: dont use the motion_detect.json anymore? 
+			options->post_process_file = "assets/motion_detect.json";
+			options->motion_detect = true;
+
+			StopCamera();
+			Teardown();
+			Configure(options);
+			StartCamera();
+		}
 	}
 
 	void wb_handle(std::vector<std::string> args)
@@ -754,6 +795,42 @@ static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<ui
 	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
 }
 
+// motion detect function
+bool detected_ = false;
+bool detected = false;
+static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request, std::string &config, std::string &scheduler_fifo)
+{
+	// Create an instance of MotionDetectStage
+	static MotionDetectStage motionDetectStage(&app);
+	motionDetectStage.UseViewfinder(true);
+	
+	if (app.firstTime && app.motion_active)
+	{
+		boost::property_tree::ptree root;
+		boost::property_tree::read_json(config, root);
+		boost::property_tree::ptree params = root.get_child("motion_detect");
+		motionDetectStage.Read(params);
+		motionDetectStage.Configure();
+		app.firstTime = false;
+	}
+
+	motionDetectStage.Process(completed_request);
+
+	completed_request->post_process_metadata.Get("motion_detect.result", detected);
+
+	std::string msg = detected ? "1" : "0";
+	static std::ofstream scheduler {scheduler_fifo};
+	
+	if (detected_ != detected) 
+	{
+		scheduler << msg << std::endl;
+	}
+
+	detected_ = detected;
+}
+
+
+
 // Function to tokenize the FIFO command
 std::vector<std::string> tokenizer(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> tokens;
@@ -784,6 +861,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	app.preview_active = !options->previewOptions.output.empty();
 	app.still_active = !options->stillOptions.output.empty();
 	app.video_active = !options->videoOptions.output.empty();
+	app.motion_active = options->motion_detect;
 	app.multi_active = ((int)app.preview_active + (int)app.still_active + (int)app.video_active) > 1;
 
 	app.OpenCamera();
@@ -794,13 +872,14 @@ static void event_loop(RPiCamMjpegApp &app)
 	if (app.fifo_active()) {
 		app.video_active = false;
 		app.still_active = false;
+		app.motion_active = false;
 	}
 
 	// -1 indicates indefinte recording (until `ca 0` recv'd.)
 	int duration_limit_seconds = options->fifo.empty() ? 10 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
-	while (app.video_active || app.preview_active || app.still_active || app.fifo_active())
+	while (app.video_active || app.preview_active || app.still_active || app.motion_active || app.fifo_active())
 	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.GetFifoCommand();
@@ -904,11 +983,17 @@ static void event_loop(RPiCamMjpegApp &app)
 							 app.CameraModel(), &opts);
 				LOG(2, "Viewfinder (Preview) image saved");
 			}
+			if (app.motion_active)
+			{
+				motion_detect(app, completed_request, options->post_process_file, options->scheduler_fifo);
+				// LOG(1, "FIFO correctly set");
+			}
 		}
 
 		// Process the VideoRecording stream
 		if (app.VideoStream())
 		{
+			// LOG(1, "here");
 			Stream *video_stream = app.VideoStream();
 			StreamInfo video_info = app.GetStreamInfo(video_stream);
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
@@ -946,9 +1031,9 @@ int main(int argc, char *argv[])
 				if (options->verbose >= 2)
 					options->Print();
 				if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
-					options->videoOptions.output.empty())
+					options->videoOptions.output.empty() && !options->motion_detect)
 					throw std::runtime_error(
-						"At least one of --preview-output, --still-output or --video-output should be provided.");
+						"At least one of --preview-output, --still-output, --video-output, or --motion-detect should be provided.");
 
 				event_loop(app);
 			}
