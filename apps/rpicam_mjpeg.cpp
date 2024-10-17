@@ -834,13 +834,14 @@ public:
 
 	// motion detect function
 	bool detected_ = false;
+	bool detected = false;
 	void motion_detect(CompletedRequestPtr &completed_request)
 	{
 		initialize_motion_detect_stage();
 		assert(motionDetectStage != nullptr);
 
 		motionDetectStage->Process(completed_request);
-		bool detected = false;
+		
 		completed_request->post_process_metadata.Get("motion_detect.result", detected);
 		std::string msg = detected ? "1" : "0";
 		static std::ofstream scheduler {GetOptions()->motion_output};
