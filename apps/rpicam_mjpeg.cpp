@@ -108,17 +108,20 @@ public:
 	{
 		if (error)
 			return std::string("Error: ") + *error;
+
 		// NOTE: Considering that RaspiMJPEG would interrupt the video recording to
 		// take a still image, we are saying that the status is "image" whenever still
 		// is active, even though we might also be recording a video.
 		if (still_active)
 			return "image"; // saving still
+		if (motion_active && video_active)
+			return "md_video"; // motion detection and video recording
 		if (video_active)
 			return "video"; // recording
+		if (motion_active)
+			return "md_ready"; // motion detection
 		if (preview_active)
 			return "ready"; // preview only
-		if (motion_active)
-			return "motion"; // motion detection
 		return "halted"; // nothing
 	}
 
