@@ -17,7 +17,7 @@ Build
 sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev libavdevice-dev
 sudo apt install -y meson ninja-build
 ```
-4. Configure the rpicam-apps build
+2. Configure the rpicam-apps build
 For desktop-based operating systems like Raspberry Pi OS:
 ```bash
 meson setup build -Denable_libav=enabled -Denable_drm=enabled -Denable_egl=enabled -Denable_qt=enabled -Denable_opencv=disabled -Denable_tflite=disabled
@@ -26,7 +26,7 @@ meson setup build -Denable_libav=enabled -Denable_drm=enabled -Denable_egl=enabl
 > **NOTE: `meson setup` only needs to be run once.**
 
 
-5. Build rpicam-apps with the following command:
+3. Build rpicam-apps with the following command:
 ```bash
 meson compile -C build
 ```
@@ -80,7 +80,21 @@ At this stage, the subcommands are not configured to run concurrently:
   - **NOTE:** Terminating with Ctrl+C will result in a corrupt video.
   - Output video is saved in the `/tmp` directory.
 
-### 4. Multi Stream
+### 4. Motion Stream
+```bash
+mkFIFO /tmp/schedulerFIFO
+cat /tmp/schedulerFIFO
+```
+* This acts the scheduler's FIFO file we will be writing into. 
+* `cat` to see the updates in the file
+
+```bash
+./build/apps/rpicam-mjpeg --motion-output /tmp/schedulerFIFO --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json
+```
+* `./build/apps/rpicam-mjpeg --motion-output /tmp/schedulerFIFO --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json` will trigger motion detection.
+  - Log "1" to scheduler FIFO if motion starts, "0" if it stops.
+
+### 5. Multi Stream
 ```bash
 ./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --preview-output /tmp/cam.jpg --preview-width 640 --preview-height 480
 ```
@@ -138,12 +152,78 @@ On terminal a:
 
 On terminal b:
 ```bash
-cho 'pv 1000 500' > /tmp/FIFO
+echo 'pv 1000 500' > /tmp/FIFO
 ```
 To set the size of preview window as 1000 x 500.
 
----
+### 4: Motion
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --motion-output /tmp/schedulerFIFO --fifo /tmp/FIFO
+```
 
+On terminal b:
+```bash
+echo 'md 1' > /tmp/FIFO
+```
+To start motion detection. 
+- `1`: starts the motion detection
+> **NOTE: `cat` to see the updates**
+
+```bash
+echo 'md 0' > /tmp/FIFO
+```
+To stop motion detection. 
+- `0`: stops the motion detection
+
+### 5: Metering
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+echo 'ca 1 30' > /tmp/FIFO
+echo 'mm centre' > /tmp/FIFO
+```
+To change metering option during video recording;
+
+### 5: Exposure compensation
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'ca 1 30' > /tmp/FIFO
+echo 'ec 5' > /tmp/FIFO
+```
+To change exposure during video recording, restricted between -10 to 10;
+
+### 6: Red and Blue gain
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'ca 1 30' > /tmp/FIFO
+echo 'ag 100 100' > /tmp/FIFO
+```
+To change red and blue gain during video recording;
+
+### 7: ISO
+On terminal a:
+```bash
+./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --fifo /tmp/FIFO
+```
+
+On terminal b:
+```bash
+echo 'ca 1 30' > /tmp/FIFO
+echo 'is 1000' > /tmp/FIFO
+```
+To change iso during video recording;
+---
 Clean and Rebuild
 ---------------------
 

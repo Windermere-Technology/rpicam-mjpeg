@@ -41,6 +41,9 @@ public:
 
 	bool Process(CompletedRequestPtr &completed_request) override;
 
+	// call this to use viewfinder stream
+	void UseViewfinder(bool use) { use_viewfinder_ = use; }
+
 private:
 	// In the Config, dimensions are given as fractions of the lores image size.
 	struct Config
@@ -65,6 +68,9 @@ private:
 	bool first_time_;
 	bool motion_detected_;
 	std::mutex mutex_;
+
+	// use the viewfinder if YUV stream reaches maximum, rmb to set the width and height
+	bool  use_viewfinder_ = false;
 };
 
 #define NAME "motion_detect"
@@ -92,7 +98,17 @@ void MotionDetectStage::Read(boost::property_tree::ptree const &params)
 void MotionDetectStage::Configure()
 {
 	StreamInfo info;
-	stream_ = app_->LoresStream(&info);
+
+	// use viewfinder if told, otherwise lores
+	if (use_viewfinder_)
+	{
+		stream_ = app_->ViewfinderStream(&info);
+	}
+	else 
+	{
+		stream_ = app_->LoresStream(&info);
+	}
+
 	if (!stream_)
 		return;
 
