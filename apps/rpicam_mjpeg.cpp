@@ -15,6 +15,9 @@
 #include <csignal> 
 #include <atomic>
 #include <system_error>
+#include <regex>
+#include <filesystem>
+#include <fstream>
 
 //for mapping fifo
 #include <map>
@@ -69,6 +72,7 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
+		commands["sc"] = std::bind(&RPiCamMjpegApp::set_counts, this);
 		commands["md"] = std::bind(&RPiCamMjpegApp::md_handle, this, std::placeholders::_1);
 		commands["wb"] = std::bind(&RPiCamMjpegApp::wb_handle, this, std::placeholders::_1);
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
@@ -103,6 +107,9 @@ public:
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
 	std::optional<std::string> error = std::nullopt;
 
+	int image_count = 0; // still and timelapse
+	int video_count = 0;
+
 	// Get the application "status": https://github.com/roberttidey/userland/blob/e2b8cd0c80902d6aeb4f157c3cf1b1f61446b061/host_applications/linux/apps/raspicam/README_RaspiMJPEG.md
 	std::string status()
 	{
@@ -123,7 +130,7 @@ public:
 	}
 
 	// Report the application status to --status-output file.
-	void WriteStatus()
+	void write_status()
 	{
 		std::string status_output = GetOptions()->status_output;
 		if (status_output.empty())
@@ -196,13 +203,18 @@ public:
 		{
 			LOG(1, "Cleaning up file output...");
 			h264FileOutput.reset(); // Free the file output resources
+			auto options = GetOptions();
+			// NOTE: videoOptions.output contains the generate file name (make_name).
+			thumbnail_save(options->videoOptions.output, 'v');
+			options->videoOptions.output = "";
+			video_count++;
 		}
 	}
 
 
 	// FIXME: This name is terrible!
 	// TODO: It'd be nice to integrate this will app.Wait(), but that probably requires a decent refactor *~*
-	std::string GetFifoCommand()
+	std::string get_fifo_command()
 	{
 		static std::string fifo_path = GetOptions()->fifo;
 		static int fd = -1;
@@ -336,7 +348,6 @@ public:
 		preview_active = true;
 		StartCamera();
 	}
-
 
 	void md_handle(std::vector<std::string> args){
 		if (args.size() < 1 || args[0] != "1")
@@ -707,118 +718,268 @@ public:
 		StartCamera();
 	}
 
+	void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
+					libcamera::ControlList const &metadata)
+	{
+		StillOptions *options = &GetOptions()->previewOptions;
+		std::string const filename = options->output;
+		std::string const &cam_model = CameraModel();
+
+		// If opts.width == 0, we should use "the default"
+		options->width = (options->width >= 128 && options->width <= 1024) ? options->width : 512;
+
+		// Copied from RaspiMJPEG ;)
+		unsigned int height = (unsigned long int)options->width * info.height / info.width;
+		height -= height % 16;
+		options->height = height;
+
+		jpeg_save(mem, info, metadata, filename, cam_model, options, options->width, options->height);
+	}
+
+	void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
+						libcamera::ControlList const &metadata, libcamera::Size outputSize)
+	{
+		StillOptions const *options = &GetOptions()->stillOptions;
+		std::string const filename = make_name(options->output);
+		std::string const &cam_model = CameraModel();
+		jpeg_save(mem, info, metadata, filename, cam_model, options, outputSize.width, outputSize.height);
+		LOG(1, "Saved still capture: " + filename);
+		thumbnail_save(filename, 'i');
+		image_count++;
 	};
 
-static void preview_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
-						 libcamera::ControlList const &metadata, std::string const &filename,
-						 std::string const &cam_model, StillOptions const *options)
-{
-	jpeg_save(mem, info, metadata, filename, cam_model, options, options->width, options->height);
-}
-
-static void still_save(std::vector<libcamera::Span<uint8_t>> const &mem, StreamInfo const &info,
-					   libcamera::ControlList const &metadata, std::string const &filename,
-					   std::string const &cam_model, StillOptions const *options, libcamera::Size outputSize)
-{
-	// Add the datetime to the filename.
-	std::string output_filename;
+	// video_save function using app to manage encoder and file output
+	void video_save(const std::vector<libcamera::Span<uint8_t>> &mem, const StreamInfo &info,
+				const libcamera::ControlList &metadata, const CompletedRequestPtr &completed_request,
+				Stream *stream)
 	{
-		// The part before the extension (if one exists)
-		size_t period_index = filename.rfind(".");
-		if (period_index == std::string::npos)
-			period_index = filename.length();
-		std::string name = filename.substr(0, period_index);
-		std::time_t now = std::time(nullptr);
-		// The date/timestamp
-		std::stringstream buffer;
-        buffer << std::put_time(std::localtime(&now), "%Y%m%d%H%M%S"); // Use &now instead of &t
-        std::string timestamp = buffer.str(); // Get the string from the buffer
+		MjpegOptions *options = GetOptions();
 
-		// Extension
-        std::string extension = filename.substr(period_index, filename.length());
-        output_filename = name + timestamp + extension;
+		// FIXME: This is a big ol' hack, since the Encoder family takes output file name from VideoOptions
+		// - We need to retain the original output name for future make_name calls.
+		// - We need to retain the result of make_name for future thumbnail_save calls.
+		if (options->videoOptions.output.empty())
+			options->videoOptions.output = make_name(options->video_output);
+
+		// Use the app instance to call initialize_encoder
+		initialize_encoder(options->videoOptions, info);
+
+		// Check if the encoder and file output were successfully initialized
+		if (!h264Encoder)
+		{
+			LOG_ERROR("Failed to initialize encoder.");
+			return;
+		}
+
+		if (!h264FileOutput)
+		{
+			LOG_ERROR("Failed to initialize file output.");
+			return;
+		}
+
+		// Get buffer to process
+		auto buffer = completed_request->buffers[stream];
+		int fd = buffer->planes()[0].fd.get(); // File descriptor of buffer
+		auto ts = metadata.get(libcamera::controls::SensorTimestamp);
+		int64_t timestamp_us = ts ? (*ts / 1000) : (buffer->metadata().timestamp / 1000);
+
+		// Ensure buffer is valid before encoding
+		if (mem.empty() || mem[0].size() == 0)
+		{
+			LOG_ERROR("Buffer is empty, cannot proceed.");
+			return;
+		}
+
+		// Encode the buffer using the H.264 encoder
+		//LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
+		h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
+	}
+
+	// motion detect function
+	bool detected_ = false;
+	void motion_detect(CompletedRequestPtr &completed_request)
+	{
+		// Create an instance of MotionDetectStage
+		static MotionDetectStage motionDetectStage(this);
+		motionDetectStage.UseViewfinder(true);
+
+		MjpegOptions *options = GetOptions();
+		std::string config = options->post_process_file;
+		std::string scheduler_fifo = options->motion_output;
 		
+		if (firstTime && motion_active)
+		{
+			boost::property_tree::ptree root;
+			boost::property_tree::read_json(config, root);
+			boost::property_tree::ptree params = root.get_child("motion_detect");
+			motionDetectStage.Read(params);
+			motionDetectStage.Configure();
+			firstTime = false;
+		}
+
+		motionDetectStage.Process(completed_request);
+		bool detected = false;
+		completed_request->post_process_metadata.Get("motion_detect.result", detected);
+
+		std::string msg = detected ? "1" : "0";
+		std::ofstream scheduler {scheduler_fifo};
+		
+		if (detected_ != detected) 
+		{
+			scheduler << msg << std::endl;
+		}
+
+		detected_ = detected;
 	}
 
-	jpeg_save(mem, info, metadata, output_filename, cam_model, options, outputSize.width, outputSize.height);
-	LOG(1, "Saved still capture: " + output_filename);
+	void set_counts()
+	{
+		MjpegOptions *options = GetOptions();
+
+		auto get_highest_by_type = [](std::string filename, std::string types) {
+			auto base = filename.substr(0, filename.rfind("/"));
+
+			std::vector<std::string> filenames;
+			for (auto const& dir_entry : std::filesystem::directory_iterator(base)) {
+				if (!dir_entry.is_regular_file()) continue;
+				filenames.push_back(dir_entry.path());
+			}
+
+			// Extract max <count> from Vec of "<name>.<type><count>.th.jpg"
+			int max_count = 0;
+			std::regex thumbnail_regex(".*.(t|i|v)([0-9]+).th.jpg");
+			std::smatch thumbnail_match;
+			for (auto &filename : filenames) {
+				// File didn't match thumbnail format
+				if (!std::regex_search(filename, thumbnail_match, thumbnail_regex))
+					continue;
+				std::string type = thumbnail_match[1];
+
+				// File didn't match required types
+				if (types.find(type) == std::string::npos)
+					continue;
+
+				int count = std::stoi(thumbnail_match[2]);
+				if (count > max_count) max_count = count;
+			}
+			return max_count;
+		};
+
+		if (!options->stillOptions.output.empty()) {
+			std::string example_filename = make_name(options->stillOptions.output);
+			image_count = get_highest_by_type(example_filename, "it") + 1;
+		}
+
+		if (!options->video_output.empty()) {
+			std::string example_filename = make_name(options->video_output);
+			video_count = get_highest_by_type(example_filename, "v") + 1;
+		}
+	}
+
+	void thumbnail_save(std::string filename, char type)
+	{
+		assert((type == 'v' || type == 'i' || type == 't') && "Type must be one of v, i, t.");
+
+		MjpegOptions const *options = GetOptions();
+		if (options->media_path.empty()) return;
+		if (options->thumb_gen.empty()) return;
+		if (options->previewOptions.output.empty()) return;
+
+		// Thumbnail generation for this type is disabled.
+		if (options->thumb_gen.find(type) == std::string::npos)
+			return;
+
+		// Only generate thumbnails for files saved at the media path.
+		if (filename.rfind(options->media_path, 0) == std::string::npos)
+			return;
+
+		int count = type == 'v' ? video_count : image_count;
+		// TODO: We are supposed to replace subdirectories relative to media_path with options->subdir_char.
+		// - ie. /var/www/media/my/sub/directory/img.jpg should generate thumbnail /var/www/media/my@sub@directory@img.jpg.i1.th.jpg
+
+		std::stringstream buffer;
+		buffer << filename << "." << type << count << ".th.jpg";
+
+		// Use the current preview as the thumbnail.
+		std::string preview_filename = options->previewOptions.output;
+		std::string thumbnail_filename = buffer.str();
+		std::ifstream preview(preview_filename, std::ios::binary);
+		std::ofstream thumbnail(thumbnail_filename, std::ios::binary);
+		thumbnail << preview.rdbuf();
+
+		LOG(2, "Saved thumbnail to " << thumbnail_filename);
+	}
+
+	std::string make_name(const std::string format, const bool is_filename = true)
+	{
+		auto options = GetOptions();
+		time_t tt = time(nullptr);
+		struct tm *ptm = localtime(&tt);
+		std::stringstream buffer;
+
+		// Filenames are assumed to be relative to media_path if not absolute.
+		if (is_filename && format.find('/') != 0 && !options->media_path.empty())
+			buffer << options->media_path << "/";
+
+		// Handle the format string
+		size_t pos, previous_pos = 0;
+
+		while ((pos = format.find('%', previous_pos)) != std::string::npos) {
+			// copy leading non format stuff.
+			buffer << format.substr(previous_pos, pos - previous_pos);
+
+			// Edge case: The string terminates in a %. 🙃
+			if (pos == format.size()) {
+				buffer << '%';
+				break;
+			}
+
+			switch (format[pos + 1])
+			{
+			case '%': // literal %
+			case 'Y': // 4 dig. year
+			case 'y': // 2 dig. year
+				buffer << std::put_time(ptm, format.substr(pos, 2).c_str());
+				break;
+			case 'M': // 2 dig. month
+				buffer << std::put_time(ptm, "%m");
+				break;
+			case 'D': // day of month
+				buffer << std::put_time(ptm, "%d");
+				break;
+			case 'h': // 24 hour
+				buffer << std::put_time(ptm, "%H");
+				break;
+			case 'm': // minute
+				buffer << std::put_time(ptm, "%M");
+				break;
+			case 's': // second
+				buffer << std::put_time(ptm, "%S");
+				break;
+			// TODO: We should support count_format config option for v, i, t
+			case 'v': // video #
+				buffer << std::to_string(video_count);
+				break;
+			case 'i': // image #
+			case 'l': // timelapse #
+				// FIXME: roberttidey RaspiMJPEG actually does use a lapse_cnt here...
+				buffer << std::to_string(image_count);
+				break;
+			default: // Fallback for unrecognized / unsupported
+				LOG(1, "Unsupported f-string: " << format.substr(pos, 2));
+				buffer << format.substr(pos, 2);
+			}
+
+			previous_pos = pos + 2; // advance past whatever we just substitued
+		}
+
+		// copy trailing non-format stuff.
+		if (previous_pos != format.size())
+			buffer << format.substr(previous_pos);
+
+		return buffer.str();
+	}
 };
-
-// video_save function using app to manage encoder and file output
-static void video_save(RPiCamMjpegApp &app, const std::vector<libcamera::Span<uint8_t>> &mem, const StreamInfo &info,
-					   const libcamera::ControlList &metadata, const std::string &filename,
-					   const std::string &cam_model, VideoOptions &options,
-					   const CompletedRequestPtr &completed_request, Stream *stream)
-{   
-
-	// Use the app instance to call initialize_encoder
-	app.initialize_encoder(options, info);
-
-	// Check if the encoder and file output were successfully initialized
-	if (!app.h264Encoder)
-	{
-		LOG_ERROR("Failed to initialize encoder.");
-		return;
-	}
-
-	if (!app.h264FileOutput)
-	{
-		LOG_ERROR("Failed to initialize file output.");
-		return;
-	}
-
-	// Get buffer to process
-	auto buffer = completed_request->buffers[stream];
-	int fd = buffer->planes()[0].fd.get(); // File descriptor of buffer
-	auto ts = metadata.get(libcamera::controls::SensorTimestamp);
-	int64_t timestamp_us = ts ? (*ts / 1000) : (buffer->metadata().timestamp / 1000);
-
-	// Ensure buffer is valid before encoding
-	if (mem.empty() || mem[0].size() == 0)
-	{
-		LOG_ERROR("Buffer is empty, cannot proceed.");
-		return;
-	}
-
-	// Encode the buffer using the H.264 encoder
-	//LOG(1, "Encoding buffer of size " << mem[0].size() << " at timestamp " << timestamp_us);
-	app.h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
-}
-
-// motion detect function
-bool detected_ = false;
-bool detected = false;
-static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request, std::string &config, std::string &scheduler_fifo)
-{
-	// Create an instance of MotionDetectStage
-	static MotionDetectStage motionDetectStage(&app);
-	motionDetectStage.UseViewfinder(true);
-	
-	if (app.firstTime && app.motion_active)
-	{
-		boost::property_tree::ptree root;
-		boost::property_tree::read_json(config, root);
-		boost::property_tree::ptree params = root.get_child("motion_detect");
-		motionDetectStage.Read(params);
-		motionDetectStage.Configure();
-		app.firstTime = false;
-	}
-
-	motionDetectStage.Process(completed_request);
-
-	completed_request->post_process_metadata.Get("motion_detect.result", detected);
-
-	std::string msg = detected ? "1" : "0";
-	static std::ofstream scheduler {scheduler_fifo};
-	
-	if (detected_ != detected) 
-	{
-		scheduler << msg << std::endl;
-	}
-
-	detected_ = detected;
-}
-
 
 
 // Function to tokenize the FIFO command
@@ -850,7 +1011,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	// FIXME: app should probably know how to set these...
 	app.preview_active = !options->previewOptions.output.empty();
 	app.still_active = !options->stillOptions.output.empty();
-	app.video_active = !options->videoOptions.output.empty();
+	app.video_active = !options->video_output.empty();
 	app.motion_active = !options->motion_output.empty();
 	app.multi_active = ((int)app.preview_active + (int)app.still_active + (int)app.video_active) > 1;
 
@@ -869,10 +1030,13 @@ static void event_loop(RPiCamMjpegApp &app)
 	int duration_limit_seconds = options->fifo.empty() ? 10 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
+	app.set_counts();
+	LOG(2, "image_count: " << app.image_count << ", video_count: " << app.video_count);
+
 	while (app.video_active || app.preview_active || app.still_active || app.motion_active || app.fifo_active())
 	{
 		// Check if there are any commands over the FIFO.
-		std::string fifo_command = app.GetFifoCommand();
+		std::string fifo_command = app.get_fifo_command();
 		if (!fifo_command.empty())
 		{			
 			LOG(1, "Got command from FIFO: " + fifo_command);
@@ -893,7 +1057,7 @@ static void event_loop(RPiCamMjpegApp &app)
 
 		}
 
-		app.WriteStatus();
+		app.write_status();
 
 		// If video is active and a duration is set, check the elapsed time
 		if (app.video_active && duration_limit_seconds >= 0)
@@ -951,31 +1115,21 @@ static void event_loop(RPiCamMjpegApp &app)
 			if (app.still_active)
 			{
 				// Save still image instead of preview when still_active is set
-				still_save(viewfinder_mem, viewfinder_info, completed_request->metadata, options->stillOptions.output,
-						   app.CameraModel(), &options->stillOptions, libcamera::Size(3200, 2400));
-				
+				app.still_save(viewfinder_mem, viewfinder_info, completed_request->metadata,
+                            libcamera::Size(3200, 2400));
+
 				LOG(2, "Still image saved");
 				app.still_active = false;
 			}
 			else if (app.preview_active || app.multi_active)
 			{
 				// Save preview if not in still mode
-				StillOptions opts = options->previewOptions;
-				// If opts.width == 0, we should use "the default"
-				opts.width = (opts.width >= 128 && opts.width <= 1024) ? opts.width : 512;
-
-				// Copied from RaspiMJPEG ;)
-				unsigned int height = (unsigned long int) opts.width*viewfinder_info.height/viewfinder_info.width;
-				height -= height%16;
-				opts.height = height;
-
-				preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata, opts.output,
-							 app.CameraModel(), &opts);
+				app.preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata);
 				LOG(2, "Viewfinder (Preview) image saved");
 			}
 			if (app.motion_active)
 			{
-				motion_detect(app, completed_request, options->post_process_file, options->motion_output);
+				app.motion_detect(completed_request);
 			}
 		}
 
@@ -989,8 +1143,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
 			if (app.video_active)
 			{
-				video_save(app, video_mem, video_info, completed_request->metadata, options->videoOptions.output,
-						   app.CameraModel(), options->videoOptions, completed_request, video_stream);
+				app.video_save(video_mem, video_info, completed_request->metadata, completed_request, video_stream);
 				LOG(2, "Video recorded and saved");
 			}
 		}
@@ -1020,7 +1173,7 @@ int main(int argc, char *argv[])
 				if (options->verbose >= 2)
 					options->Print();
 				if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
-					options->videoOptions.output.empty() && options->motion_output.empty())
+					options->video_output.empty() && options->motion_output.empty())
 					throw std::runtime_error(
 						"At least one of --preview-output, --still-output, --video-output, or --motion-output should be provided.");
 
@@ -1030,7 +1183,7 @@ int main(int argc, char *argv[])
 		catch (std::exception const &e)
 		{
 			app.error = e.what();
-			app.WriteStatus();
+			app.write_status();
 			throw;
 		}
 	}

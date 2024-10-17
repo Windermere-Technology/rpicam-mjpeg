@@ -41,7 +41,7 @@ struct MjpegOptions : public Options
 			("preview-width", value<unsigned int>(&previewOptions.width)->default_value(512)
 				->notifier(in(128, 1024, "preview-width")),
 				"Set the output preview width (min = 128, max = 1024)")
-			("video-output", value<std::string>(&videoOptions.output),
+			("video-output", value<std::string>(&video_output),
 				"Set the video output file name")
 			("video-width", value<unsigned int>(&videoOptions.width)->default_value(0),
 				"Set the output video width (0 = use default value)")
@@ -61,6 +61,10 @@ struct MjpegOptions : public Options
 			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
 			("status-output", value<std::string>(&status_output)->default_value("/dev/shm/mjpeg/status_mjpeg.txt"),
 				"Set the status output file name")
+			("media-path", value<std::string>(&media_path)->implicit_value("/var/www/html/media"),
+				"Set the media path for storing RPi_Cam_Web_Interface thumbnails")
+			("thumb-gen", value<std::string>(&thumb_gen)->default_value("vit")->implicit_value("vit"),
+				"Enable thumbnail generation for v(ideo), i(mages) and t(imelapse). (vit = video, image, timelapse enabled)")
 			("motion-output", value<std::string>(&motion_output), 
 				"The path to the Scheduler FIFO motion detection will output to.")
 			;
@@ -117,10 +121,12 @@ struct MjpegOptions : public Options
 		}
 
 		// Ensure at least one of --still-output, --video-output, or --preview-output is specified
-		if (stillOptions.output.empty() && previewOptions.output.empty() && videoOptions.output.empty() && motion_output.empty())
+		if (stillOptions.output.empty() && previewOptions.output.empty() &&  video_output.empty() && motion_output.empty())
 		{
 			throw std::runtime_error("At least one of --still-output, --preview-output, , --video-output, or --motion-output should be provided.");
 		}
+
+		assert(videoOptions.output.empty() && "videoOptions.output should only be used by the Encoder family, and RPiCamMjpegApp should set it appropriate from video_output.");
 
 		// Error if any unrecognised flags were provided
 		if (unrecognized.size())
@@ -151,8 +157,12 @@ struct MjpegOptions : public Options
 		Options::SetApp(app);
 	}
 	unsigned int frameDivider;  // Declare frameDivider here
+
+	std::string video_output;
 	std::string fifo;
 	std::string status_output;
+	std::string media_path;
+	std::string thumb_gen;
 
 	virtual void Print() const override
 	{
