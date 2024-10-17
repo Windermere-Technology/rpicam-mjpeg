@@ -399,7 +399,7 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 					// Replace the first space with an equal sign
 					line[space_pos] = '=';
 				} else {
-					LOG(1, "Skipped option" << line);
+					LOG(2, "Skipped option " << line);
 					continue;
 				}
 				modifiedFile << line << '\n';  // Add modified line to the stringstream
@@ -410,7 +410,6 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 		}
 
 		store(parse_config_file(modifiedFile, options_, true), vm);
-		LOG(1, "Help " << options_);
 		notify(vm);
 	}
 
@@ -627,6 +626,8 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 	// Set the verbosity
 	RPiCamApp::verbosity = verbose;
 
+	AdjustValuesBeforeStandardAdjustments();
+
 	if (sscanf(preview.c_str(), "%u,%u,%u,%u", &preview_x, &preview_y, &preview_width, &preview_height) != 4)
 		preview_x = preview_y = preview_width = preview_height = 0; // use default window
 
@@ -716,6 +717,8 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 
 	return true;
 }
+
+void Options::AdjustValuesBeforeStandardAdjustments() { ; }
 
 void Options::Print() const
 {

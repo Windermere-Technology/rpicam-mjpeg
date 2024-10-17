@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdio>
+#include <algorithm>
 
 #include "options.hpp"
 #include "still_options.hpp"
@@ -147,6 +148,119 @@ struct MjpegOptions : public Options
 		previewOptions.SetApp(app);
 		videoOptions.SetApp(app);
 		Options::SetApp(app);
+	}
+
+	// TODO: Something better than this :)
+	void AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera()
+	{
+		// Contrast
+		{
+			float normalized_contrast;
+			if (contrast < 0.0f) {
+				// If contrast is less than 0, map it to the range [0, 1]
+				normalized_contrast = (contrast + 100.0f) * (1.0f / 100.0f);
+			} else if (contrast == 0.0f) {
+				// If contrast is 0, set it to 1
+				normalized_contrast = 1.0f;
+			} else {
+				// If contrast is greater than 0, map it to the range [1.0f, 15.99f]
+				normalized_contrast = 1 + (contrast * 14.99f) / 100.0f;
+			}
+			contrast = std::clamp(normalized_contrast, 0.0f, 15.99f);
+		}
+
+		// Brightness
+		{
+			LOG(1, "Adjusting brightness, was " << brightness);
+			// Clamp brightness to the valid range [0, 100]
+			brightness = std::max(0.0f, std::min(brightness, 100.0f));
+
+			// Convert brightness to the range [-1.0f, 1.0f]
+			float normalized_brightness = (brightness / 50.0f) - 1.0f;
+			brightness = normalized_brightness;
+			LOG(1, "Adjusted brightness, is " << brightness);
+		}
+
+		ev = std::max(-10.0f, std::min(ev, 10.0f));
+
+		// AWB Gain
+		{
+			awb_gain_r /= 100;
+			awb_gain_b /= 100; 
+			awbgains = std::to_string(awb_gain_r) + "," + std::to_string(awb_gain_b);
+		}
+
+		// Gain
+		{
+			gain = std::max(100.0f, std::min(gain, 2000.0f));
+			//according to the Raspicam-app github issue #349 iso/100 = gain
+			gain /= 100;
+		}
+
+		// Saturation
+		{
+			float normalized_saturation;
+			if (saturation < 0.0f) {
+				// If saturation is less than 0, map it to the range [0, 1]
+				normalized_saturation = (saturation + 100.0f) * (1.0f / 100.0f);
+			} else if (saturation == 0.0f) {
+				// If saturation is 0, set it to 1
+				normalized_saturation = 1.0f;
+			} else {
+				// If saturation is greater than 0, map it to the range [1.0f, 15.99f]
+				normalized_saturation = 1 + (saturation * 14.99f) / 100.0f;
+			}
+
+			saturation = std::clamp(normalized_saturation, 0.0f, 15.99f);
+		}
+
+		// Still Quality
+		{
+			// Clamp quality to the valid range [0, 100]
+			stillOptions.quality = std::max(0.0f, std::min((float)stillOptions.quality, 100.0f));
+			float normalized_quality;
+			if (stillOptions.quality <= 10.0f) {
+				// Map quality from [0, 10] to [60, 85]
+				normalized_quality = 60.0f + (stillOptions.quality * 2.5f);
+			} else {
+				// Map quality from [10, 100] to [85, 100]
+				normalized_quality = 85.0f + ((stillOptions.quality - 10.0f) * (15.0f / 90.0f));
+			}
+			stillOptions.quality = std::clamp(normalized_quality, 60.0f, 100.0f);
+		}
+
+		// Video Bitrate
+		{
+			// Ensure bitrate is non-negative
+			auto bitrate = videoOptions.bitrate.bps();
+		
+			// Clamp bitrate to the valid range [0, 25000000]
+			bitrate = std::min(bitrate, 25000000ul);
+			videoOptions.bitrate.set(std::to_string(bitrate) + "bps");
+		}
+
+		// Sharpness
+		{
+
+			float normalized_sharpness;
+			if (sharpness < 0.0f) {
+				// If sharpness is less than 0, map it to the range [0, 1]
+				normalized_sharpness = (sharpness + 100.0f) * (1.0f / 100.0f);
+			} else if (sharpness == 0.0f) {
+				// If sharpness is 0, set it to 1
+				normalized_sharpness = 1.0f;
+			} else {
+				// If sharpness is greater than 0, map it to the range [1.0f, 15.99f]
+				normalized_sharpness = 1 + (sharpness * 14.99f) / 100.0f;
+			}
+
+			sharpness = std::clamp(normalized_sharpness, 0.0f, 15.99f);
+		}
+	}
+
+	void AdjustValuesBeforeStandardAdjustments() override
+	{
+		AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 	}
 	unsigned int frameDivider;  // Declare frameDivider here
 
