@@ -89,9 +89,9 @@ cat /tmp/schedulerFIFO
 * `cat` to see the updates in the file
 
 ```bash
-./build/apps/rpicam-mjpeg --motion-detect 1 --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/schedulerFIFO
+./build/apps/rpicam-mjpeg --motion-output /tmp/schedulerFIFO --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json
 ```
-* `./build/apps/rpicam-mjpeg --motion-detect 1 --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json --scheduler-fifo /tmp/schedulerFIFO` will trigger motion detection.
+* `./build/apps/rpicam-mjpeg --motion-output /tmp/schedulerFIFO --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json` will trigger motion detection.
   - Log "1" to scheduler FIFO if motion starts, "0" if it stops.
 
 ### 5. Multi Stream
@@ -159,20 +159,19 @@ To set the size of preview window as 1000 x 500.
 ### 4: Motion
 On terminal a:
 ```bash
-./build/apps/rpicam-mjpeg --motion-detect 1 --fifo /tmp/FIFO
+./build/apps/rpicam-mjpeg --motion-output /tmp/schedulerFIFO --fifo /tmp/FIFO
 ```
 
 On terminal b:
 ```bash
-echo 'mv 1 /tmp/schedulerFIFO' > /tmp/FIFO
+echo 'md 1' > /tmp/FIFO
 ```
 To start motion detection. 
 - `1`: starts the motion detection
-- `/tmp/schedulerFIFO`: the schedule FIFO we are writing to
 > **NOTE: `cat` to see the updates**
 
 ```bash
-echo 'mv 0' > /tmp/schedulerFIFO
+echo 'md 0' > /tmp/FIFO
 ```
 To stop motion detection. 
 - `0`: stops the motion detection

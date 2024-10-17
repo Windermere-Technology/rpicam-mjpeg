@@ -15,9 +15,7 @@
 
 struct MjpegOptions : public Options
 {
-
-	bool motion_detect;
-	std:: string scheduler_fifo;
+	std:: string motion_output;
 
 	MjpegOptions() : Options()
 	{
@@ -70,6 +68,8 @@ struct MjpegOptions : public Options
 			("motion-detect", value<bool>(&motion_detect),
 				"Turn on Motion Detection")
 			("scheduler-fifo", value<std::string>(&scheduler_fifo), "The path to the Scheduler FIFO")
+			("motion-output", value<std::string>(&motion_output), 
+				"The path to the Scheduler FIFO motion detection will output to.")
 			;
 		// clang-format on
 	}
@@ -120,13 +120,13 @@ struct MjpegOptions : public Options
 		// Check if --output is used and throw an error if it's provided
 		if (!output.empty())
 		{
-			throw std::runtime_error("The --output option is deprecated. Use --video-output, --preview-output, or --still-output instead.");
+			throw std::runtime_error("The --output option is deprecated. Use --video-output, --preview-output, or --still-output, --motion-output instead.");
 		}
 
 		// Ensure at least one of --still-output, --video-output, or --preview-output is specified
-		if (stillOptions.output.empty() && previewOptions.output.empty() &&  video_output.empty() && !motion_detect)
+		if (stillOptions.output.empty() && previewOptions.output.empty() &&  video_output.empty() && motion_output.empty())
 		{
-			throw std::runtime_error("At least one of --still-output, --preview-output, , --video-output, or --motion-detect should be provided.");
+			throw std::runtime_error("At least one of --still-output, --preview-output, , --video-output, or --motion-output should be provided.");
 		}
 
 		assert(videoOptions.output.empty() && "videoOptions.output should only be used by the Encoder family, and RPiCamMjpegApp should set it appropriate from video_output.");
