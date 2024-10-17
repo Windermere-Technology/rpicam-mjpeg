@@ -92,6 +92,7 @@ public:
 	// Declare Encoder and FileOutput as member variables
 	std::unique_ptr<Encoder> h264Encoder;
 	std::unique_ptr<FileOutput> h264FileOutput;
+	std::unique_ptr<MotionDetectStage> motionDetectStage;
 
 	bool preview_active;
 	bool still_active;
@@ -186,6 +187,39 @@ public:
 				h264FileOutput->OutputReady(data, size, timestamp, keyframe);
 			});
 	}
+
+	void initialize_motion_detect_stage()
+	{
+		if (motionDetectStage != nullptr)
+			return;
+
+		MjpegOptions *options = GetOptions();
+		(void)options;
+
+		motionDetectStage = std::make_unique<MotionDetectStage>(this);
+		// Create an instance of MotionDetectStage
+		motionDetectStage->UseViewfinder(true);
+
+		using namespace boost::property_tree;
+		ptree motion_detect_parameters;
+
+		motion_detect_parameters.push_back(ptree::value_type("roi_x", "0.1"));
+		motion_detect_parameters.push_back(ptree::value_type("roi_y", "0.1"));
+		motion_detect_parameters.push_back(ptree::value_type("roi_width", "0.8"));
+		motion_detect_parameters.push_back(ptree::value_type("roi_height", "0.8"));
+		motion_detect_parameters.push_back(ptree::value_type("difference_m", "0.1"));
+		motion_detect_parameters.push_back(ptree::value_type("difference_c", "10"));
+		motion_detect_parameters.push_back(ptree::value_type("region_threshold", "0.005"));
+		motion_detect_parameters.push_back(ptree::value_type("frame_period", "3"));
+		motion_detect_parameters.push_back(ptree::value_type("hskip", "1"));
+		motion_detect_parameters.push_back(ptree::value_type("vskip", "1"));
+		motion_detect_parameters.push_back(ptree::value_type("verbose", "0"));
+
+		motionDetectStage->Read(motion_detect_parameters);
+		motionDetectStage->Configure();
+	}
+
+	void cleanup_motion_detect_stage() { motionDetectStage.reset(); }
 
 	void cleanup()
 	{
@@ -803,35 +837,11 @@ bool detected_ = false;
 bool detected = false;
 static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request, std::string &config, std::string &scheduler_fifo)
 {
-	// Create an instance of MotionDetectStage
-	static MotionDetectStage motionDetectStage(&app);
-	motionDetectStage.UseViewfinder(true);
-	
-	if (app.firstTime && app.motion_active)
-	{
-		using namespace boost::property_tree;
-		ptree motion_detect_parameters;
+	app.initialize_motion_detect_stage();
+	assert(app.motionDetectStage != nullptr);
 
-		motion_detect_parameters.push_back(ptree::value_type("roi_x", "0.1"));
-		motion_detect_parameters.push_back(ptree::value_type("roi_y", "0.1"));
-		motion_detect_parameters.push_back(ptree::value_type("roi_width", "0.8"));
-		motion_detect_parameters.push_back(ptree::value_type("roi_height", "0.8"));
-		motion_detect_parameters.push_back(ptree::value_type("difference_m", "0.1"));
-		motion_detect_parameters.push_back(ptree::value_type("difference_c", "10"));
-		motion_detect_parameters.push_back(ptree::value_type("region_threshold", "0.005"));
-		motion_detect_parameters.push_back(ptree::value_type("frame_period", "3"));
-		motion_detect_parameters.push_back(ptree::value_type("hskip", "1"));
-		motion_detect_parameters.push_back(ptree::value_type("vskip", "1"));
-		motion_detect_parameters.push_back(ptree::value_type("verbose", "0"));
-		motionDetectStage.Read(motion_detect_parameters);
-		motionDetectStage.Configure();
-		app.firstTime = false;
-	}
-
-	motionDetectStage.Process(completed_request);
-
+	app.motionDetectStage->Process(completed_request);
 	completed_request->post_process_metadata.Get("motion_detect.result", detected);
-
 	std::string msg = detected ? "1" : "0";
 	static std::ofstream scheduler {scheduler_fifo};
 	
