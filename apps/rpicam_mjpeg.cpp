@@ -8,6 +8,7 @@
 */
 #include <cassert>
 #include <chrono>
+#include <cstdio>
 #include <ctime>
 #include <iomanip>
 #include <string>
@@ -45,6 +46,9 @@
 //check camera resolution
 #include "cameraResolutionChecker.hpp"
 
+// motion detection
+#include "post_processing_stages/motion_detect_stage.cpp"
+
 using namespace std::placeholders;
 using libcamera::Stream;
 
@@ -69,6 +73,20 @@ public:
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
 		commands["sc"] = std::bind(&RPiCamMjpegApp::set_counts, this);
+		commands["mv"] = std::bind(&RPiCamMjpegApp::mv_handle, this, std::placeholders::_1);
+		commands["wb"] = std::bind(&RPiCamMjpegApp::wb_handle, this, std::placeholders::_1);
+		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
+		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
+		commands["ag"] = std::bind(&RPiCamMjpegApp::ag_handle, this, std::placeholders::_1);
+		commands["is"] = std::bind(&RPiCamMjpegApp::is_handle, this, std::placeholders::_1);
+		commands["px"] = std::bind(&RPiCamMjpegApp::px_handle, this, std::placeholders::_1); // video resolution
+		commands["co"] = std::bind(&RPiCamMjpegApp::co_handle, this, std::placeholders::_1);
+		commands["br"] = std::bind(&RPiCamMjpegApp::br_handle, this, std::placeholders::_1);
+		commands["sa"] = std::bind(&RPiCamMjpegApp::sa_handle, this, std::placeholders::_1);
+		commands["qu"] = std::bind(&RPiCamMjpegApp::qu_handle, this, std::placeholders::_1);
+		commands["bi"] = std::bind(&RPiCamMjpegApp::bi_handle, this, std::placeholders::_1);
+		commands["sh"] = std::bind(&RPiCamMjpegApp::sh_handle, this, std::placeholders::_1);
+
 	}
 
 	~RPiCamMjpegApp() { cleanup(); }
@@ -82,6 +100,8 @@ public:
 	bool preview_active;
 	bool still_active;
 	bool video_active;
+	bool motion_active;
+	bool firstTime = true; 	// helper var for motion detect
 	// TODO: Remove this variable altogether... eventually
 	bool multi_active;
 	bool fifo_active() const { return !GetOptions()->fifo.empty(); }
@@ -104,6 +124,8 @@ public:
 			return "video"; // recording
 		if (preview_active)
 			return "ready"; // preview only
+		if (motion_active)
+			return "motion"; // motion detection
 		return "halted"; // nothing
 	}
 
@@ -117,6 +139,7 @@ public:
 		stream << status();
 	}
 
+
 	void Configure(MjpegOptions *options)
 	{
 		if (multi_active)
@@ -128,7 +151,7 @@ public:
 		{
 			ConfigureVideo();
 		}
-		else if (preview_active || still_active)
+		else if (preview_active || still_active || motion_active)
 		{
 			ConfigureViewfinder();
 		}
@@ -241,7 +264,7 @@ public:
 			throw std::runtime_error("unsupported rotation value: " + args[0]);
 
 		auto options = GetOptions();
-		options->rot(rot);
+		options->SetRotation(rot);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
@@ -269,7 +292,7 @@ public:
 			flip = Transform::HFlip * flip;
 		if (vflip)
 			flip = Transform::VFlip * flip;
-		options->flip(flip);
+		options->SetFlip(flip);
 
 		// FIXME: Can we avoid resetting everything?
 		StopCamera();
@@ -308,7 +331,7 @@ public:
 	{
 		// pv QQ WWW DD - set preview Quality, Width and Divider
 		if (args.size() < 3)
-			throw std::runtime_error("Expected three arguments to `pv` command");
+			throw std::runtime_error("Expected at least three arguments to `pv` command");
 		
 
 		auto options = GetOptions();
@@ -320,6 +343,385 @@ public:
 		Teardown();
 		Configure(options);
 		preview_active = true;
+		StartCamera();
+	}
+
+	void mv_handle(std::vector<std::string> args){
+		if (args.size() < 1 || args[0] != "1")
+		{ 
+			if (motion_active) 
+					cleanup();
+			motion_active = false;
+		}
+		else if (args.size() < 2)
+		{
+			throw std::runtime_error("Expected two arguments to `mv` command");
+		}
+		else
+		{
+			motion_active = true;	
+			firstTime = true;
+			auto options = GetOptions();
+			
+			// relative parameter
+			options->scheduler_fifo = args[1];
+
+			// FIXME: dont use the motion_detect.json anymore? 
+			options->post_process_file = "assets/motion_detect.json";
+			options->motion_detect = true;
+
+			StopCamera();
+			Teardown();
+			Configure(options);
+			StartCamera();
+		}
+	}
+
+	void wb_handle(std::vector<std::string> args)
+	{
+		using namespace libcamera;
+
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly one argument to `wb` command");
+
+		std::string awb = args[0];
+		auto options = GetOptions();
+		try
+		{
+			options->SetAwb(awb);
+		}
+		catch (const std::exception &e)
+		{
+			// We got some AWB value which libcamera does not support; ignore the command.
+			LOG(1, e.what());
+			return;
+		}
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+	
+	void px_handle(std::vector<std::string> args)
+	{
+		if (args.size() < 7) // Expecting at least 7 arguments
+			throw std::runtime_error("Expected 7 arguments to `px` command: width height video_fps preview_fps image_width image_height frame_divider");
+
+		// Parse the arguments
+		int videoWidth = std::stoi(args[0]);     // Video width
+		int videoHeight = std::stoi(args[1]);    // Video height
+		int videoFps = std::stoi(args[2]);       // Video FPS
+		int previewFps = std::stoi(args[3]);     // Preview FPS
+		int imageWidth = std::stoi(args[4]);     // Image (still capture) width
+		int imageHeight = std::stoi(args[5]);    // Image (still capture) height
+		int frameDivider = std::stoi(args[6]);   // Frame divider
+
+		// Set the video and image resolution in the options
+		auto options = GetOptions();
+		options->videoOptions.width = videoWidth;
+		options->videoOptions.height = videoHeight;
+		options->videoOptions.fps = videoFps;    // Set video FPS
+		
+		options->frameDivider = frameDivider;    // Optional: Handle this as needed
+
+		// Log the parsed values for debugging
+		LOG(1, "px command received: video=" << videoWidth << "x" << videoHeight 
+			<< ", video FPS=" << videoFps << ", preview FPS=" << previewFps 
+			<< ", image=" << imageWidth << "x" << imageHeight 
+			<< ", frame divider=" << frameDivider);
+
+		// Reconfigure the camera with the new resolution
+		StopCamera();    // Stop the camera
+		Teardown();      // Clean up the current configuration
+		Configure(options); // Apply the new configuration with the updated resolution
+		StartCamera();   // Restart the camera with the new settings
+	}
+
+	void mm_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `mm` command");
+		// accepts: centre, spot, average, matrix, custom
+		auto options = GetOptions();
+		auto new_mm_index = Options::MMLookup(args[0]);
+		options->metering = args[0];
+		options->metering_index = new_mm_index;
+		options->videoOptions.metering = args[0];
+		options->videoOptions.metering_index = new_mm_index;
+		options->stillOptions.metering = args[0];
+		options->stillOptions.metering_index = new_mm_index;
+		options->previewOptions.metering = args[0];
+		options->previewOptions.metering_index = new_mm_index;
+		//options->videoOptions.Print();
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+  
+	void co_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected at most 1 argument to `co` command");
+
+		float contrast = std::stof(args[0]);  // Use float for contrast
+
+		float normalized_contrast;
+
+		if (contrast < 0.0f) {
+			// If contrast is less than 0, map it to the range [0, 1]
+			normalized_contrast = (contrast + 100.0f) * (1.0f / 100.0f);
+		} else if (contrast == 0.0f) {
+			// If contrast is 0, set it to 1
+			normalized_contrast = 1.0f;
+		} else {
+			// If contrast is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_contrast = 1 + (contrast * 14.99f) / 100.0f;
+		}
+
+		auto options = GetOptions();
+		options->contrast = std::clamp(normalized_contrast, 0.0f, 15.99f);
+		LOG(1, "Contrast updated to: " << options->contrast);  // Log the updated contrast value
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void br_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `br` command");
+
+		float brightness = std::stof(args[0]);  // Use float for brightness
+
+		// Clamp brightness to the valid range [0, 100]
+		brightness = std::max(0.0f, std::min(brightness, 100.0f));
+
+		// Convert brightness to the range [-1.0f, 1.0f]
+		float normalized_brightness = (brightness / 50.0f) - 1.0f;
+
+		auto options = GetOptions();
+		options->brightness = normalized_brightness;
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+
+	void ec_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `ec` command");
+		
+		auto options = GetOptions();
+		float ev_comp = -1;
+		try{
+			ev_comp = stof(args[0]);
+			ev_comp = std::max(-10.0f, std::min(ev_comp, 10.0f));
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
+			return;
+		} 
+
+		options->ev = ev_comp;
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void ag_handle(std::vector<std::string> args){
+		if (args.size() != 2)
+			throw std::runtime_error("Expected only two arguments for `ag` command");
+		
+		auto options = GetOptions();
+		float ag_red = -1;
+		float ag_blue = -1;
+		try{
+			ag_red = stof(args[0])/100;
+			ag_blue = stof(args[1])/100;
+			if (ag_red < 0 || ag_blue < 0){
+				throw std::invalid_argument("Negative values are not allowed.");
+			}
+			// options requires the sum of red and blue gain to be 2.0 although not doing it doesn't create issues
+			//float epsilon = 0.00001f;
+			//if ((ag_red + ag_blue - 2.0f) > epsilon) {
+			//	throw std::invalid_argument("The sum of red gain and blue gain must be 2.0");
+			//}
+				
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: One of the values is not a valid positive number." << std::endl;
+			return;
+		} 
+		std::string ag_br =  std::to_string(ag_red) + "," + std::to_string(ag_blue);
+		options->awbgains = ag_br;
+		options->awb_gain_r = ag_red;
+		options->awb_gain_b = ag_blue;
+
+		//options->videoOptions.Print();
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void is_handle(std::vector<std::string> args){
+		if (args.size() != 1)
+			throw std::runtime_error("Expected only one argument for `is` command");
+		
+		auto options = GetOptions();
+		float new_gain = -1;
+		try{
+			new_gain = stof(args[0]);
+			new_gain = std::max(100.0f, std::min(new_gain, 2000.0f));
+		} catch (const std::invalid_argument &e) {
+			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
+			return;
+		} 
+		//according to the Raspicam-app github issue #349 iso/100 = gain
+		options->gain = new_gain/100;
+
+		//options->videoOptions.Print();
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+	
+	void sa_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected at most 1 argument to `sa` command");
+
+		float saturation = std::stof(args[0]);  // Use float for contrast
+
+		float normalized_saturation;
+
+		if (saturation < 0.0f) {
+			// If saturation is less than 0, map it to the range [0, 1]
+			normalized_saturation = (saturation + 100.0f) * (1.0f / 100.0f);
+		} else if (saturation == 0.0f) {
+			// If saturation is 0, set it to 1
+			normalized_saturation = 1.0f;
+		} else {
+			// If saturation is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_saturation = 1 + (saturation * 14.99f) / 100.0f;
+		}
+
+		auto options = GetOptions();
+		options->saturation = std::clamp(normalized_saturation, 0.0f, 15.99f);
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void ss_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `ss` command");
+
+		int shutter_speed = std::stoi(args[0]);  
+		if (shutter_speed < 0)
+			shutter_speed = 0;  // keep shutter speed to a positive value
+
+		auto options = GetOptions();
+
+		// Convert the shutter speed to a string and pass it to the set method
+		options->shutter.set(std::to_string(shutter_speed));
+
+		LOG(1, "Shutter speed updated to: " << shutter_speed << " microseconds");
+
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void qu_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `qu` command");
+	
+		float quality = std::stof(args[0]);  // Use float for quality
+	
+		// Clamp quality to the valid range [0, 100]
+		quality = std::max(0.0f, std::min(quality, 100.0f));
+	
+		float normalized_quality;
+	
+		if (quality <= 10.0f) {
+			// Map quality from [0, 10] to [60, 85]
+			normalized_quality = 60.0f + (quality * 2.5f);
+		} else {
+			// Map quality from [10, 100] to [85, 100]
+			normalized_quality = 85.0f + ((quality - 10.0f) * (15.0f / 90.0f));
+		}
+	
+		auto options = GetOptions();
+		options->stillOptions.quality = std::clamp(normalized_quality, 60.0f, 100.0f);
+	
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}
+
+	void bi_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected exactly 1 argument to `bi` command");
+	
+		int bitrate = std::stoi(args[0]);  // Use int for bitrate
+	
+		// Ensure bitrate is non-negative
+		if (bitrate < 0)
+			bitrate = 0;
+	
+		// Clamp bitrate to the valid range [0, 25000000]
+		bitrate = std::min(bitrate, 25000000);
+	
+		auto options = GetOptions();
+		options->videoOptions.bitrate.set(std::to_string(bitrate) + "bps");
+	
+		StopCamera();
+		Teardown();
+		Configure(options);
+		StartCamera();
+	}	
+
+	void sh_handle(std::vector<std::string> args)
+	{
+		if (args.size() != 1)
+			throw std::runtime_error("expected at most 1 argument to `sh` command");
+
+		float sharpness = std::stof(args[0]);  // Use float for contrast
+
+		float normalized_sharpness;
+
+		if (sharpness < 0.0f) {
+			// If sharpness is less than 0, map it to the range [0, 1]
+			normalized_sharpness = (sharpness + 100.0f) * (1.0f / 100.0f);
+		} else if (sharpness == 0.0f) {
+			// If sharpness is 0, set it to 1
+			normalized_sharpness = 1.0f;
+		} else {
+			// If sharpness is greater than 0, map it to the range [1.0f, 15.99f]
+			normalized_sharpness = 1 + (sharpness * 14.99f) / 100.0f;
+		}
+
+		auto options = GetOptions();
+		options->sharpness = std::clamp(normalized_sharpness, 0.0f, 15.99f);
+
+		StopCamera();
+		Teardown();
+		Configure(options);
 		StartCamera();
 	}
 
@@ -492,6 +894,41 @@ public:
 	}
 };
 
+// motion detect function
+bool detected_ = false;
+bool detected = false;
+static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request, std::string &config, std::string &scheduler_fifo)
+{
+	// Create an instance of MotionDetectStage
+	static MotionDetectStage motionDetectStage(&app);
+	motionDetectStage.UseViewfinder(true);
+	
+	if (app.firstTime && app.motion_active)
+	{
+		boost::property_tree::ptree root;
+		boost::property_tree::read_json(config, root);
+		boost::property_tree::ptree params = root.get_child("motion_detect");
+		motionDetectStage.Read(params);
+		motionDetectStage.Configure();
+		app.firstTime = false;
+	}
+
+	motionDetectStage.Process(completed_request);
+
+	completed_request->post_process_metadata.Get("motion_detect.result", detected);
+
+	std::string msg = detected ? "1" : "0";
+	static std::ofstream scheduler {scheduler_fifo};
+	
+	if (detected_ != detected) 
+	{
+		scheduler << msg << std::endl;
+	}
+
+	detected_ = detected;
+}
+
+
 // Function to tokenize the FIFO command
 std::vector<std::string> tokenizer(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> tokens;
@@ -511,7 +948,8 @@ std::vector<std::string> tokenizer(const std::string& str, const std::string& de
     return tokens;
 }
 	
- 
+
+
 // The main event loop for the application.
 static void event_loop(RPiCamMjpegApp &app)
 {
@@ -521,6 +959,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	app.preview_active = !options->previewOptions.output.empty();
 	app.still_active = !options->stillOptions.output.empty();
 	app.video_active = !options->videoOptions.output.empty();
+	app.motion_active = options->motion_detect;
 	app.multi_active = ((int)app.preview_active + (int)app.still_active + (int)app.video_active) > 1;
 
 	app.OpenCamera();
@@ -531,16 +970,17 @@ static void event_loop(RPiCamMjpegApp &app)
 	if (app.fifo_active()) {
 		app.video_active = false;
 		app.still_active = false;
+		app.motion_active = false;
 	}
 
 	// -1 indicates indefinte recording (until `ca 0` recv'd.)
-	int duration_limit_seconds = options->fifo.empty() ? 5 : -1;
+	int duration_limit_seconds = options->fifo.empty() ? 10 : -1;
 	auto start_time = std::chrono::steady_clock::now();
 
 	app.set_counts();
 	LOG(2, "image_count: " << app.image_count << ", video_count: " << app.video_count);
 
-	while (app.video_active || app.preview_active || app.still_active || app.fifo_active())
+	while (app.video_active || app.preview_active || app.still_active || app.motion_active || app.fifo_active())
 	{
 		// Check if there are any commands over the FIFO.
 		std::string fifo_command = app.get_fifo_command();
@@ -561,6 +1001,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			{
 				std::cout << "Invalid command: " << tokens[0] << std::endl;
 			}
+
 		}
 
 		app.write_status();
@@ -586,6 +1027,14 @@ static void event_loop(RPiCamMjpegApp &app)
 				app.video_active = false;
 			}
 		}
+
+		// Exit FIFO loop if SIGINT (Ctrl+C) is caught
+		if (stopRecording)
+		{
+			LOG(1, "SIGINT caught. Exiting FIFO loop.");
+			break;  // Exit the FIFO loop when SIGINT is received
+		}
+
 
 		RPiCamApp::Msg msg = app.Wait();
 		if (msg.type == RPiCamApp::MsgType::Timeout)
@@ -625,16 +1074,21 @@ static void event_loop(RPiCamMjpegApp &app)
 				app.preview_save(viewfinder_mem, viewfinder_info, completed_request->metadata);
 				LOG(2, "Viewfinder (Preview) image saved");
 			}
+			if (app.motion_active)
+			{
+				motion_detect(app, completed_request, options->post_process_file, options->scheduler_fifo);
+				// LOG(1, "FIFO correctly set");
+			}
 		}
 
 		// Process the VideoRecording stream
 		if (app.VideoStream())
 		{
+			// LOG(1, "here");
 			Stream *video_stream = app.VideoStream();
 			StreamInfo video_info = app.GetStreamInfo(video_stream);
 			BufferReadSync r(&app, completed_request->buffers[video_stream]);
 			const std::vector<libcamera::Span<uint8_t>> video_mem = r.Get();
-
 			if (app.video_active)
 			{
 				app.video_save(video_mem, video_info, completed_request->metadata, completed_request, video_stream);
@@ -645,15 +1099,17 @@ static void event_loop(RPiCamMjpegApp &app)
 	}
 }
 
+
+
 int main(int argc, char *argv[])
 {	
 	std::signal(SIGINT, signal_handler); // deal with SIGINT
 	try
 	{
-         // Initialize the resolution checker and print available video modes - for future use
-        CameraResolutionChecker checker;
-        std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
-        std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
+        //  // Initialize the resolution checker and print available video modes - for future use
+        // CameraResolutionChecker checker;
+        // std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
+        // std::cout << "Highest video resolution: " << highestResolution.first << "x" << highestResolution.second << std::endl;
 
 		RPiCamMjpegApp app;
 		try
@@ -665,9 +1121,9 @@ int main(int argc, char *argv[])
 				if (options->verbose >= 2)
 					options->Print();
 				if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
-					options->videoOptions.output.empty())
+					options->videoOptions.output.empty() && !options->motion_detect)
 					throw std::runtime_error(
-						"At least one of --preview-output, --still-output or --video-output should be provided.");
+						"At least one of --preview-output, --still-output, --video-output, or --motion-detect should be provided.");
 
 				event_loop(app);
 			}

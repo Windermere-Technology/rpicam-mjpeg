@@ -26,7 +26,7 @@
 
 #include <libcamera/base/shared_fd.h>
 #include <libcamera/orientation.h>
-
+#include "apps/cameraResolutionChecker.hpp"
 unsigned int RPiCamApp::verbosity = 1;
 
 static libcamera::PixelFormat mode_to_pixel_format(Mode const &mode)
@@ -555,18 +555,40 @@ void RPiCamApp::ConfigureVideo(unsigned int flags)
 	cfg.bufferCount = 6; // 6 buffers is better than 4
 	if (options_->buffer_count > 0)
 		cfg.bufferCount = options_->buffer_count;
-	// added video specific width and height 
-	 if (mjpegOptions->videoOptions.width) {
+
+	// Check if the width and height are set, otherwise use the highest available resolution
+    if (mjpegOptions->videoOptions.width == 0 || mjpegOptions->videoOptions.height == 0) {
+        // Initialize the resolution checker and get the highest resolution
+        CameraResolutionChecker checker;
+        std::pair<int, int> highestResolution = checker.getHighestVideoResolution();
+        
+        cfg.size.width = (mjpegOptions->videoOptions.width) ? mjpegOptions->videoOptions.width : highestResolution.first;
+        cfg.size.height = (mjpegOptions->videoOptions.height) ? mjpegOptions->videoOptions.height : highestResolution.second;
+
+        LOG(2, "Using highest video resolution: " << highestResolution.first << "x" << highestResolution.second);
+    } else {
+        // Use the provided width and height
         cfg.size.width = mjpegOptions->videoOptions.width;
-    } else if (options_->width) {
-        cfg.size.width = options_->width;
+        cfg.size.height = mjpegOptions->videoOptions.height;
     }
 
-    if (mjpegOptions->videoOptions.height) {
-        cfg.size.height = mjpegOptions->videoOptions.height;
-    } else if (options_->height) {
-        cfg.size.height = options_->height;
-    }
+    LOG(2, "Video resolution set to " << cfg.size.width << "x" << cfg.size.height);
+
+	// // added video specific width and height 
+	//  if (mjpegOptions->videoOptions.width) {
+    //     cfg.size.width = mjpegOptions->videoOptions.width;
+    // } else if (options_->width) {
+    //     cfg.size.width = options_->width;
+    // }
+
+    // if (mjpegOptions->videoOptions.height) {
+    //     cfg.size.height = mjpegOptions->videoOptions.height;
+    // } else if (options_->height) {
+    //     cfg.size.height = options_->height;
+    // }
+
+	// LOG(2, "Video resolution set to " << cfg.size.width << "x" << cfg.size.height);
+
 
 	if (flags & FLAG_VIDEO_JPEG_COLOURSPACE)
 		cfg.colorSpace = libcamera::ColorSpace::Sycc;
@@ -810,8 +832,14 @@ void RPiCamApp::StartCamera()
 		controls_.set(controls::AeExposureMode, options_->exposure_index);
 	if (!controls_.get(controls::ExposureValue))
 		controls_.set(controls::ExposureValue, options_->ev);
-	if (!controls_.get(controls::AwbMode))
-		controls_.set(controls::AwbMode, options_->awb_index);
+	if (!controls_.get(controls::AwbMode)) {
+		if (options_->awb_index == options_->AwbLookup("off")) {
+			controls_.set(controls::AwbEnable, false);
+		} else {
+			controls_.set(controls::AwbEnable, true);
+			controls_.set(controls::AwbMode, options_->awb_index);
+		}
+	}
 	if (!controls_.get(controls::ColourGains) && options_->awb_gain_r && options_->awb_gain_b)
 		controls_.set(controls::ColourGains,
 					  libcamera::Span<const float, 2>({ options_->awb_gain_r, options_->awb_gain_b }));

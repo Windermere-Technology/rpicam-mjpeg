@@ -15,6 +15,10 @@
 
 struct MjpegOptions : public Options
 {
+
+	bool motion_detect;
+	std:: string scheduler_fifo;
+
 	MjpegOptions() : Options()
 	{
 		using namespace boost::program_options;
@@ -52,6 +56,8 @@ struct MjpegOptions : public Options
 			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
 				"Set the output still height (0 = use default value)")
 			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
+			("frame-divider", value<unsigned int>(&frameDivider)->default_value(1), // Add frameDivider option
+            	"Set the frame divider for video recording (1 = no divider, higher values reduce frame rate)")
 			// Break nopreview flag; the preview will not work in rpicam-mjpeg!
 			("nopreview,n", value<bool>(&nopreview)->default_value(true)->implicit_value(true),
 			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
@@ -61,6 +67,9 @@ struct MjpegOptions : public Options
 				"Set the media path for storing RPi_Cam_Web_Interface thumbnails")
 			("thumb-gen", value<std::string>(&thumb_gen)->default_value("vit")->implicit_value("vit"),
 				"Enable thumbnail generation for v(ideo), i(mages) and t(imelapse). (vit = video, image, timelapse enabled)")
+			("motion-detect", value<bool>(&motion_detect),
+				"Turn on Motion Detection")
+			("scheduler-fifo", value<std::string>(&scheduler_fifo), "The path to the Scheduler FIFO")
 			;
 		// clang-format on
 	}
@@ -115,9 +124,9 @@ struct MjpegOptions : public Options
 		}
 
 		// Ensure at least one of --still-output, --video-output, or --preview-output is specified
-		if (stillOptions.output.empty() && previewOptions.output.empty() && videoOptions.output.empty())
+		if (stillOptions.output.empty() && previewOptions.output.empty() && videoOptions.output.empty() && !motion_detect)
 		{
-			throw std::runtime_error("At least one of --still-output, --video-output, or --preview-output should be provided.");
+			throw std::runtime_error("At least one of --still-output, --preview-output, , --video-output, or --motion-detect should be provided.");
 		}
 
 		// Error if any unrecognised flags were provided
@@ -128,14 +137,14 @@ struct MjpegOptions : public Options
 
 		// Save the actual rotation/flip applied by the settings, as we need this later.
 		bool ok;
-		rot(transformFromRotation(rotation(), &ok));
+		SetRotation(transformFromRotation(rotation(), &ok));
 		assert(ok && "This should have failed already if it was going to.");
-		Transform flip_ = Transform::Identity;
+		Transform flip = Transform::Identity;
 		if (vflip())
-			flip_ = flip_ * Transform::VFlip;
+			flip = flip * Transform::VFlip;
 		if (hflip())
-			flip_ = flip_ * Transform::HFlip;
-		flip(flip_);
+			flip = flip * Transform::HFlip;
+		SetFlip(flip);
 
 		return true;
 	}
@@ -148,7 +157,7 @@ struct MjpegOptions : public Options
 		videoOptions.SetApp(app);
 		Options::SetApp(app);
 	}
-
+	unsigned int frameDivider;  // Declare frameDivider here
 	std::string fifo;
 	std::string status_output;
 	std::string media_path;
@@ -175,19 +184,32 @@ struct MjpegOptions : public Options
 	*/
 	libcamera::Transform rot() const { return rot_; }
 
-	void rot(libcamera::Transform value)
+	void SetRotation(libcamera::Transform value)
 	{
 		rot_ = value;
 		updateTransform();
 	};
 
-	libcamera::Transform flip() const { return flip_; }
-
-	void flip(libcamera::Transform value)
+	void SetFlip(libcamera::Transform value)
 	{
 		flip_ = value;
 		updateTransform();
 	}
+
+	void SetAwb(std::string new_awb)
+	{
+		// NOTE: This will throw if we got an unhandled value.
+		auto new_awb_index = Options::AwbLookup(new_awb);
+		awb = new_awb;
+		awb_index = new_awb_index;
+		stillOptions.awb = new_awb;
+		stillOptions.awb_index = new_awb_index;
+		previewOptions.awb = new_awb;
+		previewOptions.awb_index = new_awb_index;
+		videoOptions.awb = new_awb;
+		videoOptions.awb_index = new_awb_index;
+	}
+
 private:
 	libcamera::Transform rot_;
 	libcamera::Transform flip_;

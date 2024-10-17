@@ -9,6 +9,7 @@ rpicam_app_src += files([
     'rpicam_app.cpp',
     'options.cpp',
     'post_processor.cpp',
+    '../apps/cameraResolutionChecker.cpp',
 ])
 
 core_headers = files([
