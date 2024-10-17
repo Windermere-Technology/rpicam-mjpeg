@@ -817,6 +817,43 @@ public:
 		h264Encoder->EncodeBuffer(fd, mem[0].size(), mem[0].data(), info, timestamp_us);
 	}
 
+	// motion detect function
+	bool detected_ = false;
+	void motion_detect(CompletedRequestPtr &completed_request)
+	{
+		// Create an instance of MotionDetectStage
+		static MotionDetectStage motionDetectStage(this);
+		motionDetectStage.UseViewfinder(true);
+
+		MjpegOptions *options = GetOptions();
+		std::string config = options->post_process_file;
+		std::string scheduler_fifo = options->scheduler_fifo;
+		
+		if (firstTime && motion_active)
+		{
+			boost::property_tree::ptree root;
+			boost::property_tree::read_json(config, root);
+			boost::property_tree::ptree params = root.get_child("motion_detect");
+			motionDetectStage.Read(params);
+			motionDetectStage.Configure();
+			firstTime = false;
+		}
+
+		motionDetectStage.Process(completed_request);
+		bool detected = false;
+		completed_request->post_process_metadata.Get("motion_detect.result", detected);
+
+		std::string msg = detected ? "1" : "0";
+		std::ofstream scheduler {scheduler_fifo};
+		
+		if (detected_ != detected) 
+		{
+			scheduler << msg << std::endl;
+		}
+
+		detected_ = detected;
+	}
+
 	void set_counts()
 	{
 		MjpegOptions *options = GetOptions();
@@ -893,40 +930,6 @@ public:
 		LOG(2, "Saved thumbnail to " << thumbnail_filename);
 	}
 };
-
-// motion detect function
-bool detected_ = false;
-bool detected = false;
-static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_request, std::string &config, std::string &scheduler_fifo)
-{
-	// Create an instance of MotionDetectStage
-	static MotionDetectStage motionDetectStage(&app);
-	motionDetectStage.UseViewfinder(true);
-	
-	if (app.firstTime && app.motion_active)
-	{
-		boost::property_tree::ptree root;
-		boost::property_tree::read_json(config, root);
-		boost::property_tree::ptree params = root.get_child("motion_detect");
-		motionDetectStage.Read(params);
-		motionDetectStage.Configure();
-		app.firstTime = false;
-	}
-
-	motionDetectStage.Process(completed_request);
-
-	completed_request->post_process_metadata.Get("motion_detect.result", detected);
-
-	std::string msg = detected ? "1" : "0";
-	static std::ofstream scheduler {scheduler_fifo};
-	
-	if (detected_ != detected) 
-	{
-		scheduler << msg << std::endl;
-	}
-
-	detected_ = detected;
-}
 
 
 // Function to tokenize the FIFO command
@@ -1076,7 +1079,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 			if (app.motion_active)
 			{
-				motion_detect(app, completed_request, options->post_process_file, options->scheduler_fifo);
+				app.motion_detect(completed_request);
 				// LOG(1, "FIFO correctly set");
 			}
 		}
