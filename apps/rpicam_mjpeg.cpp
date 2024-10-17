@@ -809,10 +809,21 @@ static void motion_detect(RPiCamMjpegApp &app, CompletedRequestPtr &completed_re
 	
 	if (app.firstTime && app.motion_active)
 	{
-		boost::property_tree::ptree root;
-		boost::property_tree::read_json(config, root);
-		boost::property_tree::ptree params = root.get_child("motion_detect");
-		motionDetectStage.Read(params);
+		using namespace boost::property_tree;
+		ptree motion_detect_parameters;
+
+		motion_detect_parameters.push_back(ptree::value_type("roi_x", "0.1"));
+		motion_detect_parameters.push_back(ptree::value_type("roi_y", "0.1"));
+		motion_detect_parameters.push_back(ptree::value_type("roi_width", "0.8"));
+		motion_detect_parameters.push_back(ptree::value_type("roi_height", "0.8"));
+		motion_detect_parameters.push_back(ptree::value_type("difference_m", "0.1"));
+		motion_detect_parameters.push_back(ptree::value_type("difference_c", "10"));
+		motion_detect_parameters.push_back(ptree::value_type("region_threshold", "0.005"));
+		motion_detect_parameters.push_back(ptree::value_type("frame_period", "3"));
+		motion_detect_parameters.push_back(ptree::value_type("hskip", "1"));
+		motion_detect_parameters.push_back(ptree::value_type("vskip", "1"));
+		motion_detect_parameters.push_back(ptree::value_type("verbose", "0"));
+		motionDetectStage.Read(motion_detect_parameters);
 		motionDetectStage.Configure();
 		app.firstTime = false;
 	}
