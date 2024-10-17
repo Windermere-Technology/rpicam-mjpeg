@@ -897,11 +897,13 @@ public:
 		};
 
 		if (!options->stillOptions.output.empty()) {
-			image_count = get_highest_by_type(options->stillOptions.output, "it") + 1;
+			std::string example_filename = make_name(options->stillOptions.output);
+			image_count = get_highest_by_type(example_filename, "it") + 1;
 		}
 
 		if (!options->video_output.empty()) {
-			video_count = get_highest_by_type(options->video_output, "v") + 1;
+			std::string example_filename = make_name(options->video_output);
+			video_count = get_highest_by_type(example_filename, "v") + 1;
 		}
 	}
 
@@ -939,14 +941,18 @@ public:
 		LOG(2, "Saved thumbnail to " << thumbnail_filename);
 	}
 
-	std::string make_name(const std::string format)
+	std::string make_name(const std::string format, const bool is_filename = true)
 	{
+		auto options = GetOptions();
 		time_t tt = time(nullptr);
 		struct tm *ptm = localtime(&tt);
-
-		// TODO: We should support that mediapath shenanigans that RaspiMJPEG did!
-
 		std::stringstream buffer;
+
+		// Filenames are assumed to be relative to media_path if not absolute.
+		if (is_filename && format.find('/') != 0 && !options->media_path.empty())
+			buffer << options->media_path << "/";
+
+		// Handle the format string
 		size_t pos, previous_pos = 0;
 
 		while ((pos = format.find('%', previous_pos)) != std::string::npos) {
