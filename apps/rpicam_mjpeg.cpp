@@ -69,7 +69,7 @@ public:
 		commands["pv"] = std::bind(&RPiCamMjpegApp::pv_handle, this, std::placeholders::_1);
 		commands["ro"] = std::bind(&RPiCamMjpegApp::ro_handle, this, std::placeholders::_1);
 		commands["fl"] = std::bind(&RPiCamMjpegApp::fl_handle, this, std::placeholders::_1);
-		commands["mv"] = std::bind(&RPiCamMjpegApp::mv_handle, this, std::placeholders::_1);
+		commands["md"] = std::bind(&RPiCamMjpegApp::md_handle, this, std::placeholders::_1);
 		commands["wb"] = std::bind(&RPiCamMjpegApp::wb_handle, this, std::placeholders::_1);
 		commands["mm"] = std::bind(&RPiCamMjpegApp::mm_handle, this, std::placeholders::_1);
 		commands["ec"] = std::bind(&RPiCamMjpegApp::ec_handle, this, std::placeholders::_1);
@@ -338,29 +338,19 @@ public:
 	}
 
 
-	void mv_handle(std::vector<std::string> args){
+	void md_handle(std::vector<std::string> args){
 		if (args.size() < 1 || args[0] != "1")
 		{ 
-			if (motion_active) 
-					cleanup();
 			motion_active = false;
-		}
-		else if (args.size() < 2)
-		{
-			throw std::runtime_error("Expected two arguments to `mv` command");
 		}
 		else
 		{
 			motion_active = true;	
 			firstTime = true;
 			auto options = GetOptions();
-			
-			// relative parameter
-			options->scheduler_fifo = args[1];
 
 			// FIXME: dont use the motion_detect.json anymore? 
 			options->post_process_file = "assets/motion_detect.json";
-			options->motion_detect = true;
 
 			StopCamera();
 			Teardown();
@@ -861,7 +851,7 @@ static void event_loop(RPiCamMjpegApp &app)
 	app.preview_active = !options->previewOptions.output.empty();
 	app.still_active = !options->stillOptions.output.empty();
 	app.video_active = !options->videoOptions.output.empty();
-	app.motion_active = options->motion_detect;
+	app.motion_active = !options->motion_output.empty();
 	app.multi_active = ((int)app.preview_active + (int)app.still_active + (int)app.video_active) > 1;
 
 	app.OpenCamera();
@@ -985,8 +975,7 @@ static void event_loop(RPiCamMjpegApp &app)
 			}
 			if (app.motion_active)
 			{
-				motion_detect(app, completed_request, options->post_process_file, options->scheduler_fifo);
-				// LOG(1, "FIFO correctly set");
+				motion_detect(app, completed_request, options->post_process_file, options->motion_output);
 			}
 		}
 
@@ -1031,9 +1020,9 @@ int main(int argc, char *argv[])
 				if (options->verbose >= 2)
 					options->Print();
 				if (options->previewOptions.output.empty() && options->stillOptions.output.empty() &&
-					options->videoOptions.output.empty() && !options->motion_detect)
+					options->videoOptions.output.empty() && options->motion_output.empty())
 					throw std::runtime_error(
-						"At least one of --preview-output, --still-output, --video-output, or --motion-detect should be provided.");
+						"At least one of --preview-output, --still-output, --video-output, or --motion-output should be provided.");
 
 				event_loop(app);
 			}
