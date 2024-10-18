@@ -197,7 +197,7 @@ Options::Options()
 			"Chooses the camera to use. To list the available indexes, use the --list-cameras option.")
 		("verbose,v", value<unsigned int>(&verbose)->default_value(1)->implicit_value(2),
 			"Set verbosity level. Level 0 is no output, 1 is default, 2 is verbose.")
-		("config,c", value<std::string>(&config_file)->default_value("/etc/raspimjpeg.1")->implicit_value("/etc/raspimjpeg"),
+		("config,c", value<std::string>(&config_file)->implicit_value("/etc/raspimjpeg"),
 			"Read the options from a file. If no filename is specified, default to config.txt. "
 			"In case of duplicate options, the ones provided on the command line will be used. "
 			"Note that the config file must only contain the long form options.")

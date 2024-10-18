@@ -76,6 +76,9 @@ struct MjpegOptions : public Options
 	{
 		using namespace libcamera;
 
+		// Set the default config file for raspimjpeg (may be overwritten with -c).
+		config_file = "/etc/raspimjpeg";
+
 		// We need to intersect all the unrecognized options, since it is only those that
 		// *nothing* recognized that are actually unrecognized by our program.
 		std::vector<std::string> unrecognized_tmp, unrecognized;
