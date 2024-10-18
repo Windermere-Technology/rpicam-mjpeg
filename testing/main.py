@@ -24,10 +24,10 @@ def run_program():
     # Command to run the rpicam_mjpeg program
     cmd = [
         PROGRAM_PATH,
-        "--video-output", VIDEO_OUTPUT,
-        "--still-output", STILL_OUTPUT,
-        "--preview-output", PREVIEW_OUTPUT,
-        "--fifo", FIFO_PATH
+        "--video_path", VIDEO_OUTPUT,
+        "--image_path", STILL_OUTPUT,
+        "--preview_path", PREVIEW_OUTPUT,
+        "--control_file", FIFO_PATH
     ]
 
     # Start the rpicam_mjpeg program
