@@ -25,6 +25,10 @@ jobs:
           sudo apt update
           sudo apt install -y python3-pillow meson ninja-build
 
+      - name: Setup Meson Build Directory
+        run: |
+          meson setup build
+
       - name: Build Project
         run: |
           meson compile -C build
@@ -39,3 +43,4 @@ jobs:
         with:
           name: testing-report
           path: testing_report.txt
+          
