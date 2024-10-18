@@ -17,19 +17,19 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set Up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11.2'
+      - name: Verify Python Installation
+        run: |
+          python3.11 --version
+          pip3.11 --version
 
       - name: Install Dependencies
         run: |
-          python3 -m pip install --upgrade pip
+          python3.11 -m pip install --upgrade pip
           sudo apt install python3 python3-pillow
 
       - name: Run Test Suite
         run: |
-          python3 testing/main.py
+          python3.11 testing/main.py
 
       - name: Upload Testing Report
         if: always()
