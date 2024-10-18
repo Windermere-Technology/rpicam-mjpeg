@@ -42,7 +42,7 @@ struct MjpegOptions : public Options
 			("preview_width", value<unsigned int>(&previewOptions.width)->default_value(512)
 				->notifier(in(128, 1024, "width")),
 				"Set the output preview width (min = 128, max = 1024)")
-			("video_path", value<std::string>(&videoOptions.output),
+			("video_path", value<std::string>(&video_output),
 				"Set the video output file name")
 			("video_width", value<unsigned int>(&videoOptions.width)->default_value(0),
 				"Set the output video width (0 = use default value)")
