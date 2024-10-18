@@ -248,11 +248,40 @@ sudo meson install -C build
 
 This will ensure the previous build is removed, a fresh build is created, and the updated binaries are installed.
 
-## Multistream Stat
-**TODO:**
-- [x] Make use of 2 YUV streams and a RAW stream concurrently.
-- [ ] Modification to support MotionOptions
-- [ ] Assign RAW stream to motion
+## Testing
+
+This project implements comprehensive automated testing for the `rpicam_mjpeg` program using Python scripts. The testing suite ensures that each FIFO command functions as expected and that any changes to the codebase do not introduce regressions. The tests include both functional command execution and detailed verification of their effects using image analysis.
+
+### Overview
+
+- **Automated Tests**: Each FIFO command (`im`, `ca`, `pv`, `ro`, `fl`, `sc`, `md`, `wb`, `mm`, `ec`, `ag`, `is`, `px`, `co`, `br`, `sa`, `qu`, `bi`, `sh`) is tested individually to verify its functionality.
+
+### Installation
+
+1. **Install Dependencies**:
+
+   ```bash
+   sudo apt install python3 python3-pillow
+   ```
+
+2. **Ensure FIFO Directory Exists**
+
+   Ensure FIFO Directory Exists:
+The FIFO is located at /var/www/html/FIFO. Ensure this directory exists and has the appropriate permissions.
+
+   ```bash
+   sudo mkdir -p /var/www/html
+   sudo mkfifo /var/www/html/FIFO
+   sudo chmod 777 /var/www/html/FIFO
+   ```
+
+### Run the Test
+```bash
+python3 testing/main.py
+```
+
+### Check Test Results
+The testing result would be stored in `testing_report.txt` in the main directory, it would also be printed out.
 
 License
 -------
