@@ -358,7 +358,7 @@ public:
 			video_active = true;
 			start_time = std::chrono::steady_clock::now();
 			if (args.size() >= 2) {
-				duration_limit_seconds = stoi(args[1]);
+				duration_limit_seconds = std::stoi(args[1]);
 			} else {
 				// FIXME: Magic number :)
 				duration_limit_seconds = -1; // Indefinite
@@ -375,8 +375,8 @@ public:
 		
 
 		auto options = GetOptions();
-		options->previewOptions.quality = stoi(args[0]);
-		options->previewOptions.width = stoi(args[1]);
+		options->previewOptions.quality = std::stoi(args[0]);
+		options->previewOptions.width = std::stoi(args[1]);
 		// TODO: Use the divider to set the frame rate somehow
 
 		StopCamera();
@@ -497,21 +497,9 @@ public:
 
 		float contrast = std::stof(args[0]);  // Use float for contrast
 
-		float normalized_contrast;
-
-		if (contrast < 0.0f) {
-			// If contrast is less than 0, map it to the range [0, 1]
-			normalized_contrast = (contrast + 100.0f) * (1.0f / 100.0f);
-		} else if (contrast == 0.0f) {
-			// If contrast is 0, set it to 1
-			normalized_contrast = 1.0f;
-		} else {
-			// If contrast is greater than 0, map it to the range [1.0f, 15.99f]
-			normalized_contrast = 1 + (contrast * 14.99f) / 100.0f;
-		}
-
 		auto options = GetOptions();
-		options->contrast = std::clamp(normalized_contrast, 0.0f, 15.99f);
+		options->contrast = contrast;
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 		LOG(1, "Contrast updated to: " << options->contrast);  // Log the updated contrast value
 
 		StopCamera();
@@ -526,15 +514,9 @@ public:
 			throw std::runtime_error("expected exactly 1 argument to `br` command");
 
 		float brightness = std::stof(args[0]);  // Use float for brightness
-
-		// Clamp brightness to the valid range [0, 100]
-		brightness = std::max(0.0f, std::min(brightness, 100.0f));
-
-		// Convert brightness to the range [-1.0f, 1.0f]
-		float normalized_brightness = (brightness / 50.0f) - 1.0f;
-
 		auto options = GetOptions();
-		options->brightness = normalized_brightness;
+		options->brightness = brightness;
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 
 		StopCamera();
 		Teardown();
@@ -548,17 +530,14 @@ public:
 			throw std::runtime_error("Expected only one argument for `ec` command");
 		
 		auto options = GetOptions();
-		float ev_comp = -1;
 		try{
-			ev_comp = stof(args[0]);
-			ev_comp = std::max(-10.0f, std::min(ev_comp, 10.0f));
+			options->ev = stof(args[0]);;
 		} catch (const std::invalid_argument &e) {
 			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
 			return;
 		} 
 
-		options->ev = ev_comp;
-
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 		StopCamera();
 		Teardown();
 		Configure(options);
@@ -570,30 +549,19 @@ public:
 			throw std::runtime_error("Expected only two arguments for `ag` command");
 		
 		auto options = GetOptions();
-		float ag_red = -1;
-		float ag_blue = -1;
 		try{
-			ag_red = stof(args[0])/100;
-			ag_blue = stof(args[1])/100;
-			if (ag_red < 0 || ag_blue < 0){
+			options->awb_gain_r = stof(args[0]);
+			options->awb_gain_b = stof(args[1]);
+			if (options->awb_gain_r < 0 || options->awb_gain_b < 0){
 				throw std::invalid_argument("Negative values are not allowed.");
 			}
-			// options requires the sum of red and blue gain to be 2.0 although not doing it doesn't create issues
-			//float epsilon = 0.00001f;
-			//if ((ag_red + ag_blue - 2.0f) > epsilon) {
-			//	throw std::invalid_argument("The sum of red gain and blue gain must be 2.0");
-			//}
 				
 		} catch (const std::invalid_argument &e) {
 			std::cerr << "Invalid argument: One of the values is not a valid positive number." << std::endl;
 			return;
 		} 
-		std::string ag_br =  std::to_string(ag_red) + "," + std::to_string(ag_blue);
-		options->awbgains = ag_br;
-		options->awb_gain_r = ag_red;
-		options->awb_gain_b = ag_blue;
 
-		//options->videoOptions.Print();
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 		StopCamera();
 		Teardown();
 		Configure(options);
@@ -605,18 +573,14 @@ public:
 			throw std::runtime_error("Expected only one argument for `is` command");
 		
 		auto options = GetOptions();
-		float new_gain = -1;
 		try{
-			new_gain = stof(args[0]);
-			new_gain = std::max(100.0f, std::min(new_gain, 2000.0f));
+			options->gain = stof(args[0]);
 		} catch (const std::invalid_argument &e) {
 			std::cerr << "Invalid argument: The provided value is not a valid number." << std::endl;
 			return;
-		} 
-		//according to the Raspicam-app github issue #349 iso/100 = gain
-		options->gain = new_gain/100;
+		}
 
-		//options->videoOptions.Print();
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 		StopCamera();
 		Teardown();
 		Configure(options);
@@ -628,23 +592,9 @@ public:
 		if (args.size() != 1)
 			throw std::runtime_error("expected at most 1 argument to `sa` command");
 
-		float saturation = std::stof(args[0]);  // Use float for contrast
-
-		float normalized_saturation;
-
-		if (saturation < 0.0f) {
-			// If saturation is less than 0, map it to the range [0, 1]
-			normalized_saturation = (saturation + 100.0f) * (1.0f / 100.0f);
-		} else if (saturation == 0.0f) {
-			// If saturation is 0, set it to 1
-			normalized_saturation = 1.0f;
-		} else {
-			// If saturation is greater than 0, map it to the range [1.0f, 15.99f]
-			normalized_saturation = 1 + (saturation * 14.99f) / 100.0f;
-		}
-
 		auto options = GetOptions();
-		options->saturation = std::clamp(normalized_saturation, 0.0f, 15.99f);
+		options->saturation = std::stof(args[0]);  // Use float for contrast
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 
 		StopCamera();
 		Teardown();
@@ -680,23 +630,10 @@ public:
 			throw std::runtime_error("expected exactly 1 argument to `qu` command");
 	
 		float quality = std::stof(args[0]);  // Use float for quality
-	
-		// Clamp quality to the valid range [0, 100]
-		quality = std::max(0.0f, std::min(quality, 100.0f));
-	
-		float normalized_quality;
-	
-		if (quality <= 10.0f) {
-			// Map quality from [0, 10] to [60, 85]
-			normalized_quality = 60.0f + (quality * 2.5f);
-		} else {
-			// Map quality from [10, 100] to [85, 100]
-			normalized_quality = 85.0f + ((quality - 10.0f) * (15.0f / 90.0f));
-		}
-	
+
 		auto options = GetOptions();
-		options->stillOptions.quality = std::clamp(normalized_quality, 60.0f, 100.0f);
-	
+		options->stillOptions.quality = quality;
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 		StopCamera();
 		Teardown();
 		Configure(options);
@@ -708,17 +645,9 @@ public:
 		if (args.size() != 1)
 			throw std::runtime_error("expected exactly 1 argument to `bi` command");
 	
-		int bitrate = std::stoi(args[0]);  // Use int for bitrate
-	
-		// Ensure bitrate is non-negative
-		if (bitrate < 0)
-			bitrate = 0;
-	
-		// Clamp bitrate to the valid range [0, 25000000]
-		bitrate = std::min(bitrate, 25000000);
-	
 		auto options = GetOptions();
-		options->videoOptions.bitrate.set(std::to_string(bitrate) + "bps");
+		options->videoOptions.bitrate.set(args[0] + "bps"); // FIXME: This is really bad!
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 	
 		StopCamera();
 		Teardown();
@@ -731,23 +660,9 @@ public:
 		if (args.size() != 1)
 			throw std::runtime_error("expected at most 1 argument to `sh` command");
 
-		float sharpness = std::stof(args[0]);  // Use float for contrast
-
-		float normalized_sharpness;
-
-		if (sharpness < 0.0f) {
-			// If sharpness is less than 0, map it to the range [0, 1]
-			normalized_sharpness = (sharpness + 100.0f) * (1.0f / 100.0f);
-		} else if (sharpness == 0.0f) {
-			// If sharpness is 0, set it to 1
-			normalized_sharpness = 1.0f;
-		} else {
-			// If sharpness is greater than 0, map it to the range [1.0f, 15.99f]
-			normalized_sharpness = 1 + (sharpness * 14.99f) / 100.0f;
-		}
-
 		auto options = GetOptions();
-		options->sharpness = std::clamp(normalized_sharpness, 0.0f, 15.99f);
+		options->sharpness = std::stof(args[0]);  // Use float for contrast
+		options->AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 
 		StopCamera();
 		Teardown();
@@ -1198,6 +1113,8 @@ int main(int argc, char *argv[])
 					throw std::runtime_error(
 						"At least one of --preview-output, --still-output, --video-output, or --motion-output should be provided.");
 
+				std::cout << "Reading options from config file: " << options->config_file << std::endl;
+				
 				event_loop(app);
 			}
 		}
