@@ -21,53 +21,9 @@ env:
   LIBCAMAMERA_LD_LIBRARY_DIR: "${{github.workspace}}/../libcamera/install/lib/aarch64-linux-gnu"
 
 jobs:
-  build-libcamera:
+  build-rpicam-apps-ning:
 
     runs-on: [ self-hosted ]
-
-    steps:
-      - name: Clean libcamera
-        run: rm -rf ${{env.LIBCAMERA_SRC_DIR}}
-
-      - name: Pull libcamera
-        run: git clone --depth=1 https://github.com/raspberrypi/libcamera.git ${{env.LIBCAMERA_SRC_DIR}}
-
-      - name: libcamera version
-        run: cd ${{env.LIBCAMERA_SRC_DIR}} && git log -1
-
-      - name: Setup meson
-        run: |
-          cd ${{env.LIBCAMERA_SRC_DIR}}
-          meson setup build \
-            -Dprefix=${{env.LIBCAMAMERA_INSTALL_DIR}} \
-            -Dpipelines=rpi/vc4,rpi/pisp \
-            -Dipas=rpi/vc4,rpi/pisp \
-            -Dpycamera=enabled \
-            -Dtest=false \
-            -Dbuildtype=${{env.BUILD_TYPE}} \
-            -Dlibpisp:default_library=static
-
-      - name: Build libcamera
-        run: |
-          cd ${{env.LIBCAMERA_SRC_DIR}}/build
-          ninja install
-        timeout-minutes: 15
-
-      - name: Tar libcamera build artifacts
-        run: |
-          tar -cvf build-artifacts-libcamera.tar -C ${{env.LIBCAMERA_SRC_DIR}} .
-
-      - name: Upload libcamera build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts-libcamera
-          path: build-artifacts-libcamera.tar
-          retention-days: 7
-
-  build-rpicam-apps:
-
-    runs-on: [ self-hosted ]
-    needs: build-libcamera
 
     steps:
       - uses: actions/checkout@v4
@@ -111,7 +67,7 @@ jobs:
           path: build-artifacts-rpicam-apps.tar
           retention-days: 7
 
-  run-tests:
+  run-tests-ning:
 
     runs-on: [ self-hosted ]
     needs: build-rpicam-apps
