@@ -197,7 +197,7 @@ Options::Options()
 			"Chooses the camera to use. To list the available indexes, use the --list-cameras option.")
 		("verbose,v", value<unsigned int>(&verbose)->default_value(1)->implicit_value(2),
 			"Set verbosity level. Level 0 is no output, 1 is default, 2 is verbose.")
-		("config,c", value<std::string>(&config_file)->implicit_value("config.txt"),
+		("config,c", value<std::string>(&config_file)->implicit_value("/etc/raspimjpeg"),
 			"Read the options from a file. If no filename is specified, default to config.txt. "
 			"In case of duplicate options, the ones provided on the command line will be used. "
 			"Note that the config file must only contain the long form options.")
@@ -382,7 +382,34 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 	std::ifstream ifs(config_file.c_str());
 	if (ifs)
 	{
-		store(parse_config_file(ifs, options_), vm);
+		// Read contents of input file stream (ifs)
+		// Replace <key> <value> with <key>=<value> to comply with parse_config_files
+		// Any line that follows the <key>=<value> format will be parsed as normal,
+		//	unless it contains spaces within the value field, the first of which will
+		//	be replaced.
+		std::stringstream modifiedFile;
+		std::string line;
+
+		if (ifs.is_open()) {
+			while (std::getline(ifs, line)) {
+				// Finds first space in each line only
+				size_t space_pos = line.find(' ');
+				// npos indicates end of string
+				if (space_pos != std::string::npos) {
+					// Replace the first space with an equal sign
+					line[space_pos] = '=';
+				} else {
+					LOG(2, "Skipped option " << line);
+					continue;
+				}
+				modifiedFile << line << '\n';  // Add modified line to the stringstream
+			}
+		} 
+		else {
+			std::cerr << "Unable to open file" << std::endl;
+		}
+
+		store(parse_config_file(modifiedFile, options_, true), vm);
 		notify(vm);
 	}
 
@@ -599,6 +626,8 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 	// Set the verbosity
 	RPiCamApp::verbosity = verbose;
 
+	AdjustValuesBeforeStandardAdjustments();
+
 	if (sscanf(preview.c_str(), "%u,%u,%u,%u", &preview_x, &preview_y, &preview_width, &preview_height) != 4)
 		preview_x = preview_y = preview_width = preview_height = 0; // use default window
 
@@ -688,6 +717,8 @@ bool Options::Parse(int argc, char *argv[], std::vector<std::string> *unrecogniz
 
 	return true;
 }
+
+void Options::AdjustValuesBeforeStandardAdjustments() { ; }
 
 void Options::Print() const
 {

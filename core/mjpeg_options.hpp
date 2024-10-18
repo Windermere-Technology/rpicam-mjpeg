@@ -8,6 +8,7 @@
 #pragma once
 
 #include <cstdio>
+#include <algorithm>
 
 #include "options.hpp"
 #include "still_options.hpp"
@@ -36,36 +37,36 @@ struct MjpegOptions : public Options
 
 		// clang-format off
 		options_.add_options()
-			("preview-output", value<std::string>(&previewOptions.output),
+			("preview_path", value<std::string>(&previewOptions.output),
 				"Set the preview output file name")
-			("preview-width", value<unsigned int>(&previewOptions.width)->default_value(512)
-				->notifier(in(128, 1024, "preview-width")),
+			("preview_width", value<unsigned int>(&previewOptions.width)->default_value(512)
+				->notifier(in(128, 1024, "width")),
 				"Set the output preview width (min = 128, max = 1024)")
-			("video-output", value<std::string>(&video_output),
+			("video_path", value<std::string>(&video_output),
 				"Set the video output file name")
-			("video-width", value<unsigned int>(&videoOptions.width)->default_value(0),
+			("video_width", value<unsigned int>(&videoOptions.width)->default_value(0),
 				"Set the output video width (0 = use default value)")
-			("video-height", value<unsigned int>(&videoOptions.height)->default_value(0),
+			("video_height", value<unsigned int>(&videoOptions.height)->default_value(0),
 				"Set the output video height (0 = use default value)")
-			("still-output", value<std::string>(&stillOptions.output),
+			("image_path", value<std::string>(&stillOptions.output),
 				"Set the still output file name")
-			("still-width", value<unsigned int>(&stillOptions.width)->default_value(0),
+			("image_width", value<unsigned int>(&stillOptions.width)->default_value(0),
 				"Set the output still width (0 = use default value)")
-			("still-height", value<unsigned int>(&stillOptions.height)->default_value(0),
+			("image_height", value<unsigned int>(&stillOptions.height)->default_value(0),
 				"Set the output still height (0 = use default value)")
-			("fifo", value<std::string>(&fifo), "The path to the commands FIFO")
+			("control_file", value<std::string>(&fifo), "The path to the commands FIFO")
 			("frame-divider", value<unsigned int>(&frameDivider)->default_value(1), // Add frameDivider option
             	"Set the frame divider for video recording (1 = no divider, higher values reduce frame rate)")
 			// Break nopreview flag; the preview will not work in rpicam-mjpeg!
 			("nopreview,n", value<bool>(&nopreview)->default_value(true)->implicit_value(true),
 			"	**DO NOT USE** The preview window does not work for rpicam-mjpeg")
-			("status-output", value<std::string>(&status_output)->default_value("/dev/shm/mjpeg/status_mjpeg.txt"),
+			("status_file", value<std::string>(&status_output)->default_value("/dev/shm/mjpeg/status_mjpeg.txt"),
 				"Set the status output file name")
-			("media-path", value<std::string>(&media_path)->implicit_value("/var/www/html/media"),
+			("media_path", value<std::string>(&media_path)->implicit_value("/var/www/html/media"),
 				"Set the media path for storing RPi_Cam_Web_Interface thumbnails")
-			("thumb-gen", value<std::string>(&thumb_gen)->default_value("vit")->implicit_value("vit"),
+			("thumb_gen", value<std::string>(&thumb_gen)->default_value("vit")->implicit_value("vit"),
 				"Enable thumbnail generation for v(ideo), i(mages) and t(imelapse). (vit = video, image, timelapse enabled)")
-			("motion-output", value<std::string>(&motion_output), 
+			("motion_pipe", value<std::string>(&motion_output),
 				"The path to the Scheduler FIFO motion detection will output to.")
 			;
 		// clang-format on
@@ -74,6 +75,9 @@ struct MjpegOptions : public Options
 	virtual bool Parse(int argc, char *argv[]) override
 	{
 		using namespace libcamera;
+
+		// Set the default config file for raspimjpeg (may be overwritten with -c).
+		config_file = "/etc/raspimjpeg";
 
 		// We need to intersect all the unrecognized options, since it is only those that
 		// *nothing* recognized that are actually unrecognized by our program.
@@ -120,14 +124,6 @@ struct MjpegOptions : public Options
 			throw std::runtime_error("The --output option is deprecated. Use --video-output, --preview-output, or --still-output, --motion-output instead.");
 		}
 
-		// Ensure at least one of --still-output, --video-output, or --preview-output is specified
-		if (stillOptions.output.empty() && previewOptions.output.empty() &&  video_output.empty() && motion_output.empty())
-		{
-			throw std::runtime_error("At least one of --still-output, --preview-output, , --video-output, or --motion-output should be provided.");
-		}
-
-		assert(videoOptions.output.empty() && "videoOptions.output should only be used by the Encoder family, and RPiCamMjpegApp should set it appropriate from video_output.");
-
 		// Error if any unrecognised flags were provided
 		if (unrecognized.size())
 		{
@@ -155,6 +151,119 @@ struct MjpegOptions : public Options
 		previewOptions.SetApp(app);
 		videoOptions.SetApp(app);
 		Options::SetApp(app);
+	}
+
+	// TODO: Something better than this :)
+	void AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera()
+	{
+		// Contrast
+		{
+			float normalized_contrast;
+			if (contrast < 0.0f) {
+				// If contrast is less than 0, map it to the range [0, 1]
+				normalized_contrast = (contrast + 100.0f) * (1.0f / 100.0f);
+			} else if (contrast == 0.0f) {
+				// If contrast is 0, set it to 1
+				normalized_contrast = 1.0f;
+			} else {
+				// If contrast is greater than 0, map it to the range [1.0f, 15.99f]
+				normalized_contrast = 1 + (contrast * 14.99f) / 100.0f;
+			}
+			contrast = std::clamp(normalized_contrast, 0.0f, 15.99f);
+		}
+
+		// Brightness
+		{
+			LOG(1, "Adjusting brightness, was " << brightness);
+			// Clamp brightness to the valid range [0, 100]
+			brightness = std::max(0.0f, std::min(brightness, 100.0f));
+
+			// Convert brightness to the range [-1.0f, 1.0f]
+			float normalized_brightness = (brightness / 50.0f) - 1.0f;
+			brightness = normalized_brightness;
+			LOG(1, "Adjusted brightness, is " << brightness);
+		}
+
+		ev = std::max(-10.0f, std::min(ev, 10.0f));
+
+		// AWB Gain
+		{
+			awb_gain_r /= 100;
+			awb_gain_b /= 100; 
+			awbgains = std::to_string(awb_gain_r) + "," + std::to_string(awb_gain_b);
+		}
+
+		// Gain
+		{
+			gain = std::max(100.0f, std::min(gain, 2000.0f));
+			//according to the Raspicam-app github issue #349 iso/100 = gain
+			gain /= 100;
+		}
+
+		// Saturation
+		{
+			float normalized_saturation;
+			if (saturation < 0.0f) {
+				// If saturation is less than 0, map it to the range [0, 1]
+				normalized_saturation = (saturation + 100.0f) * (1.0f / 100.0f);
+			} else if (saturation == 0.0f) {
+				// If saturation is 0, set it to 1
+				normalized_saturation = 1.0f;
+			} else {
+				// If saturation is greater than 0, map it to the range [1.0f, 15.99f]
+				normalized_saturation = 1 + (saturation * 14.99f) / 100.0f;
+			}
+
+			saturation = std::clamp(normalized_saturation, 0.0f, 15.99f);
+		}
+
+		// Still Quality
+		{
+			// Clamp quality to the valid range [0, 100]
+			stillOptions.quality = std::max(0.0f, std::min((float)stillOptions.quality, 100.0f));
+			float normalized_quality;
+			if (stillOptions.quality <= 10.0f) {
+				// Map quality from [0, 10] to [60, 85]
+				normalized_quality = 60.0f + (stillOptions.quality * 2.5f);
+			} else {
+				// Map quality from [10, 100] to [85, 100]
+				normalized_quality = 85.0f + ((stillOptions.quality - 10.0f) * (15.0f / 90.0f));
+			}
+			stillOptions.quality = std::clamp(normalized_quality, 60.0f, 100.0f);
+		}
+
+		// Video Bitrate
+		{
+			// Ensure bitrate is non-negative
+			auto bitrate = videoOptions.bitrate.bps();
+		
+			// Clamp bitrate to the valid range [0, 25000000]
+			bitrate = std::min(bitrate, 25000000ul);
+			videoOptions.bitrate.set(std::to_string(bitrate) + "bps");
+		}
+
+		// Sharpness
+		{
+
+			float normalized_sharpness;
+			if (sharpness < 0.0f) {
+				// If sharpness is less than 0, map it to the range [0, 1]
+				normalized_sharpness = (sharpness + 100.0f) * (1.0f / 100.0f);
+			} else if (sharpness == 0.0f) {
+				// If sharpness is 0, set it to 1
+				normalized_sharpness = 1.0f;
+			} else {
+				// If sharpness is greater than 0, map it to the range [1.0f, 15.99f]
+				normalized_sharpness = 1 + (sharpness * 14.99f) / 100.0f;
+			}
+
+			sharpness = std::clamp(normalized_sharpness, 0.0f, 15.99f);
+		}
+	}
+
+	void AdjustValuesBeforeStandardAdjustments() override
+	{
+		AdjustRaspiMjpegOptionsToThingsThatActuallyWorkWithLibcamera();
 	}
 	unsigned int frameDivider;  // Declare frameDivider here
 
