@@ -21,7 +21,7 @@ env:
   LIBCAMAMERA_LD_LIBRARY_DIR: "${{github.workspace}}/../libcamera/install/lib/aarch64-linux-gnu"
 
 jobs:
-  build-rpicam-apps-ning:
+  build-rpicam-apps:
 
     runs-on: [ self-hosted ]
 
@@ -67,7 +67,7 @@ jobs:
           path: build-artifacts-rpicam-apps.tar
           retention-days: 7
 
-  run-tests-ning:
+  run-tests:
 
     runs-on: [ self-hosted ]
     needs: build-rpicam-apps
