@@ -105,7 +105,7 @@ jobs:
 
       - name: Run Test Suite
         run: |
-          python3 main.py
+          python3 testing/main.py
         timeout-minutes: 10
 
       - name: Upload Testing Report
