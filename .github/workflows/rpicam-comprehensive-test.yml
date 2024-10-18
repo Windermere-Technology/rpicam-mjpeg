@@ -1,4 +1,4 @@
-name: Raspberry Pi Camera Tests
+name: New Comprehensive Test
 
 # Trigger the workflow on push to any branch, pull requests to any branch, and manual triggers
 on:
@@ -10,30 +10,152 @@ on:
       - '**'
   workflow_dispatch:
 
+env:
+  # Customize the meson build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: release
+  GCC_COMPILER: "CC=/usr/bin/gcc CXX=/usr/bin/g++"
+  LIBCAMERA_SRC_DIR: "${{github.workspace}}/../libcamera"
+  PICAMERA2_SRC_DIR: "${{github.workspace}}/../picamera2"
+  LIBCAMAMERA_INSTALL_DIR: "${{github.workspace}}/../libcamera/install"
+  LIBCAMAMERA_LKG_DIR: "/home/pi/libcamera_lkg"
+  LIBCAMAMERA_LD_LIBRARY_DIR: "${{github.workspace}}/../libcamera/install/lib/aarch64-linux-gnu"
+
 jobs:
-  run-tests:
-    runs-on: self-hosted
+  build-libcamera:
+
+    runs-on: [ self-hosted ]
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Clean libcamera
+        run: rm -rf ${{env.LIBCAMERA_SRC_DIR}}
 
-      - name: Verify Python Installation
-        run: |
-          python3.11 --version
-          pip3.11 --version
+      - name: Pull libcamera
+        run: git clone --depth=1 https://github.com/raspberrypi/libcamera.git ${{env.LIBCAMERA_SRC_DIR}}
 
-      - name: Install Dependencies
+      - name: libcamera version
+        run: cd ${{env.LIBCAMERA_SRC_DIR}} && git log -1
+
+      - name: Setup meson
         run: |
-          python3.11 -m pip install --upgrade pip
-          sudo apt install python3 python3-pillow
+          cd ${{env.LIBCAMERA_SRC_DIR}}
+          meson setup build \
+            -Dprefix=${{env.LIBCAMAMERA_INSTALL_DIR}} \
+            -Dpipelines=rpi/vc4,rpi/pisp \
+            -Dipas=rpi/vc4,rpi/pisp \
+            -Dpycamera=enabled \
+            -Dtest=false \
+            -Dbuildtype=${{env.BUILD_TYPE}} \
+            -Dlibpisp:default_library=static
+
+      - name: Build libcamera
+        run: |
+          cd ${{env.LIBCAMERA_SRC_DIR}}/build
+          ninja install
+        timeout-minutes: 15
+
+      - name: Tar libcamera build artifacts
+        run: |
+          tar -cvf build-artifacts-libcamera.tar -C ${{env.LIBCAMERA_SRC_DIR}} .
+
+      - name: Upload libcamera build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-libcamera
+          path: build-artifacts-libcamera.tar
+          retention-days: 7
+
+  build-rpicam-apps:
+
+    runs-on: [ self-hosted ]
+    needs: build-libcamera
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: true
+
+      - name: Clean libcamera
+        run: |
+          rm -rf ${{env.LIBCAMERA_SRC_DIR}}
+          mkdir -p ${{env.LIBCAMERA_SRC_DIR}}
+
+      - name: Download libcamera artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-libcamera
+          path: ${{github.workspace}}
+
+      - name: Untar libcamera files
+        run: tar -xvf build-artifacts-libcamera.tar -C ${{env.LIBCAMERA_SRC_DIR}}
+
+      - name: Configure meson for rpicam-apps
+        run: |
+          ${{env.GCC_COMPILER}} meson setup ${{github.workspace}}/build \
+            --pkg-config-path=${{env.LIBCAMARA_INSTALL_DIR}}/lib/aarch64-linux-gnu/pkgconfig/ \
+            -Dbuildtype=${{env.BUILD_TYPE}}
+        timeout-minutes: 5
+
+      - name: Build rpicam-apps
+        run: ninja -C ${{github.workspace}}/build
+        timeout-minutes: 15
+
+      - name: Tar rpicam-apps build artifacts
+        run: |
+          tar -cvf build-artifacts-rpicam-apps.tar -C ${{github.workspace}}/build .
+
+      - name: Upload rpicam-apps build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-rpicam-apps
+          path: build-artifacts-rpicam-apps.tar
+          retention-days: 7
+
+  run-tests:
+
+    runs-on: [ self-hosted ]
+    needs: build-rpicam-apps
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          clean: true
+
+      - name: Create test output directory
+        run: mkdir -p ${{github.workspace}}/test_output
+
+      - name: Download rpicam-apps build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-rpicam-apps
+          path: ${{github.workspace}}
+
+      - name: Untar rpicam-apps build artifacts
+        run: tar -xvf build-artifacts-rpicam-apps.tar --one-top-level=build
+
+      - name: Download libcamera build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-libcamera
+          path: ${{github.workspace}}
+
+      - name: Untar libcamera build artifacts
+        run: tar -xvf build-artifacts-libcamera.tar -C ${{env.LIBCAMARA_SRC_DIR}} --one-top-level=install
+
+      - name: Setup environment for tests
+        run: |
+          sudo apt install python3-pillow
 
       - name: Run Test Suite
         run: |
-          python3.11 testing/main.py
+          python3 main.py
+        timeout-minutes: 10
 
       - name: Upload Testing Report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: testing-report
           path: testing_report.txt
+          retention-days: 7
