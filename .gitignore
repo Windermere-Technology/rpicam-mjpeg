@@ -5,3 +5,5 @@ build
 *.mp4
 .vscode/
 subprojects
+*.pyc
+testing_report.txt
