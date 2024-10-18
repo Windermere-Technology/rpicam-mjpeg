@@ -1091,12 +1091,9 @@ int main(int argc, char *argv[])
 					options->video_output.empty() && options->motion_output.empty())
 					throw std::runtime_error(
 						"At least one of --preview-output, --still-output, --video-output, or --motion-output should be provided.");
-				if (options->config_file.empty()) {
-					puts("No config file given.");
-				}
-				else {
-					std::cout << "Reading options from config file: " << options->config_file << std::endl;
-				}
+
+				std::cout << "Reading options from config file: " << options->config_file << std::endl;
+				
 				event_loop(app);
 			}
 		}
