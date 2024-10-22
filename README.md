@@ -94,10 +94,12 @@ If the script isn't executable, you can alternatively run:
 ```bash
 bash install-rpicam-mjpeg.sh
 ```
+**Skip to [4. Running rpicam-mjpeg on RPi_Cam_Web_Interface](#4-running-rpicam-mjpeg-on-rpi_cam_web_interface) if you have already completed [Automatic Setup (Recommended)](#automatic-setup-recommended).**
 
-#### Manual Setup (Optional)
+-------
+#### Manually Install RPi_Cam_Web_Interface (Optional)
 
-### GPAC
+#### GPAC
 
 GPAC is not available in the Bookworm repos (see issue #689). Follow these instructions to build GPAC from source:
 
@@ -129,7 +131,7 @@ GPAC is not available in the Bookworm repos (see issue #689). Follow these instr
    sudo make install
    ```
 
-### RPi_Cam_Web_Interface
+#### RPi_Cam_Web_Interface
 
 After building and installing GPAC, proceed with the **RPi_Cam_Web_Interface** installation:
 
