@@ -85,9 +85,7 @@ bin/install-rpicam-mjpeg.sh
 ```bash
 ./start.sh
 ```
-NOTE: When you run this command, you may encounter error: `bash: line 1: /usr/bin/raspimjpeg: cannot execute: required file not found`, this is due to historical reasons, which can be safely ignored.
-
-Finally, visit our program at: http://localhost/html/ and start using it!
+Visit our program at: http://localhost/html/ and start using it!
 
 Now, you can directly skip to [4. Running rpicam-mjpeg on RPi_Cam_Web_Interface](#4-running-rpicam-mjpeg-on-rpi_cam_web_interface).
 
