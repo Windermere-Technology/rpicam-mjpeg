@@ -1,5 +1,5 @@
 # rpicam-mjpeg
-**rpicam-mjpeg** is a multi-stream camera system for Raspberry Pi, integrated with the RPi_Cam_Web_Interface.
+A replacement high-level driver for the Raspberry Pi RaspiMJPEG C++, integrated with the RPi_Cam_Web_Interface.
 
 
 # Table of Contents
