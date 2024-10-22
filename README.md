@@ -67,7 +67,32 @@ See [9. FIFO](#9-fifo) for more details.
 
 ## 2. Setup
 
-Follow these steps to set up and install the **rpicam-apps** system on your Raspberry Pi.
+#### Automatic Setup (Recommended)
+
+### Step 1: Install dependencies + rpicam-mjpeg
+```bash
+git clone git@github.com:consiliumsolutions/RPi_Cam_Web_Interface.git
+cd RPi_Cam_Web_Interface
+bin/install-rpicam-mjpeg.sh
+```
+
+### Step 2: Install the web application
+```bash
+./install.sh
+```
+
+### Step 3: Run the web application + rpicam-mjpeg
+```bash
+./start.sh
+```
+NOTE: When you run this command, you may encounter error: `bash: line 1: /usr/bin/raspimjpeg: cannot execute: required file not found`, this is due to historical reasons, which can be safely ignored.
+
+Finally, visit our program at: http://localhost/html/ and start using it!
+
+Now, you can directly skip to [4. Running rpicam-mjpeg on RPi_Cam_Web_Interface](#4-running-rpicam-mjpeg-on-rpi_cam_web_interface).
+
+#### Manual Setup (Try this only when the Automatic Setup doesn't work)
+Follow the following steps to manually set up and install the **rpicam-apps** system on your Raspberry Pi.
 
 ### Step 1: Build libcamera
 * Build and install the raspberrypi/libcamera library; see documentation [here.](https://www.raspberrypi.com/documentation/computers/camera_software.html#building-libcamera)
@@ -107,21 +132,6 @@ The official instructions to build rpicam-apps; see documentation [here.](https:
 ### Step 3: Install RPi_Cam_Web_Interface
 
 This section focuses on setting up the web interface for managing the camera system.
-
-#### Automatic Setup (Recommended)
-
-To use the automatic installer included with the **RPi_Cam_Web_Interface** project, run the following command:
-
-```bash
-./install-rpicam-mjpeg.sh
-```
-
-If the script isn't executable, you can alternatively run:
-
-```bash
-bash install-rpicam-mjpeg.sh
-```
-**Skip to [4. Running rpicam-mjpeg on RPi_Cam_Web_Interface](#4-running-rpicam-mjpeg-on-rpi_cam_web_interface) if you have already completed [Automatic Setup (Recommended)](#automatic-setup-recommended).**
 
 -------
 #### Manually Install RPi_Cam_Web_Interface (Optional)
