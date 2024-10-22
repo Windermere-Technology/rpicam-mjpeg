@@ -203,20 +203,12 @@ mkdir /dev/shm/mjpeg       # This is where the preview stream will be written; i
 * This acts the scheduler's FIFO file we will be writing into. 
 * `cat` to see the updates in the file
 
-### Error handling 
+## 5. Starting the Web Interface
 
-   If you see the following error after you do  **Start now** or run `start.sh`:
-   ```bash
-   bash: line 1: /usr/bin/raspimjpeg: cannot execute: required file not found
-   ```
-   Ignore it and visit `http://localhost/html/` on your Raspberry Pi to access the RPi_Cam_Web_Interface.
-
+Visit `http://localhost/html/` on your Raspberry Pi to access the RPi_Cam_Web_Interface.
 > **Info**  
 > However, since the browser on the Raspberry Pi might be laggy, it's recommended to access the interface from another device on the same network.  
 > Simply open a browser and navigate to `http://<Raspberry_Pi_IP>/html/` (replace `<Raspberry_Pi_IP>` with your Raspberry Pi's local IP address).
-
-
-## 5. Starting the Web Interface
 
 The web interface should already be running, but if it is not, you can start the Apache web server using the following command:
 
