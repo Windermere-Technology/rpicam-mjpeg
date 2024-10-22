@@ -67,7 +67,7 @@ See [9. FIFO](#9-fifo) for more details.
 
 ## 2. Setup
 
-#### Automatic Setup (Recommended)
+### Automatic Setup (Recommended)
 
 ### Step 1: Install dependencies + rpicam-mjpeg
 ```bash
@@ -91,7 +91,7 @@ Finally, visit our program at: http://localhost/html/ and start using it!
 
 Now, you can directly skip to [4. Running rpicam-mjpeg on RPi_Cam_Web_Interface](#4-running-rpicam-mjpeg-on-rpi_cam_web_interface).
 
-#### Manual Setup (Try this only when the Automatic Setup doesn't work)
+### Manual Setup (Try this only when the Automatic Setup doesn't work)
 Follow the following steps to manually set up and install the **rpicam-apps** system on your Raspberry Pi.
 
 ### Step 1: Build libcamera
