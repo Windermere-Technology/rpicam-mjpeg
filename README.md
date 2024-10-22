@@ -1,5 +1,30 @@
 # rpicam-mjpeg
+**rpicam-mjpeg** is a multi-stream camera system for Raspberry Pi, integrated with the RPi_Cam_Web_Interface.
 
+
+# Table of Contents
+
+1. [Introduction](#1-introduction)
+   
+2. [Setup](#2-setup)
+    - [Step 1: Build libcamera](#step-1-build-libcamera)
+    - [Step 2: Build rpicam-apps](#step-2-build-rpicam-apps)
+    - [Step 3: Install RPi_Cam_Web_Interface](#step-3-install-rpi_cam_web_interface)
+        - [Automatic Setup (Recommended)](#automatic-setup-recommended)
+        - [Manually Install RPi_Cam_Web_Interface (Optional)](#manually-install-rpi_cam_web_interface-optional)
+
+4. [Running rpicam-mjpeg on RPi_Cam_Web_Interface](#4-running-rpicam-mjpeg-on-rpi_cam_web_interface)
+
+5. [Starting the Web Interface](#5-starting-the-web-interface)
+
+6. [Running rpicam-mjpeg](#6-running-rpicam-mjpeg)
+
+7. [Clean and Rebuild](#7-clean-and-rebuild)
+
+8. [Testing](#8-testing)
+
+9. [FIFO](#9-fifo)
+    
 ## 1. Introduction
 
 This program is designed to develop a **libcamera-based, multi-stream camera system**. It supports the latest Raspberry Pi models and offers features such as:
@@ -12,6 +37,7 @@ This program is designed to develop a **libcamera-based, multi-stream camera sys
 ### RPi_Cam_Web_Interface Integration
 
 A key aspect of this system is its integration with the **RPi_Cam_Web_Interface**, providing a graphical interface(GUI) for managing all camera operations instead of command line interface(CLI). 
+
 
 ### Supported FIFO Commands. 
 See [9. FIFO](#9-fifo) for more details.
@@ -37,6 +63,7 @@ See [9. FIFO](#9-fifo) for more details.
 | `qu`    | Set image quality              |
 | `bi`    | Set video bitrate              |
 | `sh`    | Adjust image sharpness         |
+
 
 ## 2. Setup
 
@@ -389,7 +416,6 @@ echo 'ca 1 30' > /tmp/FIFO
 echo 'is 1000' > /tmp/FIFO
 ```
 To change iso during video recording;
----
 
 License
 -------
