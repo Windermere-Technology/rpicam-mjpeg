@@ -7,23 +7,20 @@ A replacement high-level driver for the Raspberry Pi RaspiMJPEG C++, integrated 
 1. [Introduction](#1-introduction)
    
 2. [Setup](#2-setup)
-    - [Step 1: Build libcamera](#step-1-build-libcamera)
-    - [Step 2: Build rpicam-apps](#step-2-build-rpicam-apps)
-    - [Step 3: Install RPi_Cam_Web_Interface](#step-3-install-rpi_cam_web_interface)
-        - [Automatic Setup (Recommended)](#automatic-setup-recommended)
-        - [Manually Install RPi_Cam_Web_Interface (Optional)](#manually-install-rpi_cam_web_interface-optional)
+   - [Automatic Setup (Recommended)](#automatic-setup-recommended)
+   - [Manually Install RPi_Cam_Web_Interface (Optional)](#manually-install-rpi_cam_web_interface-optional)
 
-4. [Running rpicam-mjpeg on RPi_Cam_Web_Interface](#4-running-rpicam-mjpeg-on-rpi_cam_web_interface)
+3. [Running rpicam-mjpeg on RPi_Cam_Web_Interface](#3-running-rpicam-mjpeg-on-rpi_cam_web_interface)
 
-5. [Starting the Web Interface](#5-starting-the-web-interface)
+4. [Starting the Web Interface](#4-starting-the-web-interface)
 
-6. [Running rpicam-mjpeg](#6-running-rpicam-mjpeg)
+5. [Running rpicam-mjpeg](#5-running-rpicam-mjpeg)
 
-7. [Clean and Rebuild](#7-clean-and-rebuild)
+6. [Clean and Rebuild](#6-clean-and-rebuild)
 
-8. [Testing](#8-testing)
+7. [Testing](#7-testing)
 
-9. [FIFO](#9-fifo)
+8. [FIFO](#8-fifo)
     
 ## 1. Introduction
 
@@ -40,7 +37,7 @@ A key aspect of this system is its integration with the **RPi_Cam_Web_Interface*
 
 
 ### Supported FIFO Commands. 
-See [9. FIFO](#9-fifo) for more details.
+See [8. FIFO](#8-fifo) for more details.
 
 | Command | Description                    |
 |---------|--------------------------------|
@@ -87,7 +84,7 @@ bin/install-rpicam-mjpeg.sh
 ```
 Visit our program at: http://localhost/html/ and start using it!
 
-Now, you can directly skip to [4. Running rpicam-mjpeg on RPi_Cam_Web_Interface](#4-running-rpicam-mjpeg-on-rpi_cam_web_interface).
+Now, you can directly skip to [3. Running rpicam-mjpeg on RPi_Cam_Web_Interface](#3-running-rpicam-mjpeg-on-rpi_cam_web_interface).
 
 ### Manual Setup (Try this only when the Automatic Setup doesn't work)
 Follow the following steps to manually set up and install the **rpicam-apps** system on your Raspberry Pi.
@@ -190,7 +187,7 @@ After building and installing GPAC, proceed with the **RPi_Cam_Web_Interface** i
    - Start automatically: **No**
    - Port: **80**
 --------------------
-## 4. Running rpicam-mjpeg on RPi_Cam_Web_Interface
+## 3. Running rpicam-mjpeg on RPi_Cam_Web_Interface
 
 ### Prerequisites
 
@@ -203,7 +200,7 @@ mkdir /dev/shm/mjpeg       # This is where the preview stream will be written; i
 * This acts the scheduler's FIFO file we will be writing into. 
 * `cat` to see the updates in the file
 
-## 5. Starting the Web Interface
+## 4. Starting the Web Interface
 
 Visit `http://localhost/html/` on your Raspberry Pi to access the RPi_Cam_Web_Interface.
 > **Info**  
@@ -228,7 +225,7 @@ echo ready | tr -d '\n' > /dev/shm/mjpeg/status_mjpeg.txt
 
 After setting the status, you should now see text on the buttons in the web interface, indicating that it is ready.
 
-## 6. Running rpicam-mjpeg
+## 5. Running rpicam-mjpeg
 
 Now, you can start running **rpicam-mjpeg** by executing the following command:
 
@@ -243,7 +240,7 @@ This means that you have successfully configured the **RPi_Cam_Web_Interface** a
 
 To quit the FIFO environment and stop **rpicam-mjpeg**, use `Ctrl + C` in the terminal where it is running.
 
-## 7. Clean and Rebuild
+## 6. Clean and Rebuild
 
 
 If you need to clean the build and start fresh, follow these steps:
@@ -267,7 +264,7 @@ sudo meson install -C build
 
 This will ensure the previous build is removed, a fresh build is created, and the updated binaries are installed.
 
-## 8. Testing
+## 7. Testing
 
 This project implements comprehensive automated testing for the `rpicam_mjpeg` program using Python scripts. The testing suite ensures that each FIFO command functions as expected and that any changes to the codebase do not introduce regressions. The tests include both functional command execution and detailed verification of their effects using image analysis.
 
@@ -302,7 +299,7 @@ python3 testing/main.py
 ### Check Test Results
 The testing result would be stored in `testing_report.txt` in the main directory, it would also be printed out.
 
-## 9. FIFO
+## 8. FIFO
 
 You don’t need FIFO commands to interact with the camera system, but if you want to use it for advanced control, here are the steps:
 
