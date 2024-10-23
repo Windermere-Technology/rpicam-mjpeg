@@ -1,17 +1,99 @@
-# rpicam-apps
-This is a small suite of libcamera-based applications to drive the cameras on a Raspberry Pi platform.
+# rpicam-mjpeg
+A replacement high-level driver for the Raspberry Pi RaspiMJPEG C++, integrated with the RPi_Cam_Web_Interface.
 
->[!WARNING]
->These applications and libraries have been renamed from `libcamera-*` to `rpicam-*`. Symbolic links are installed to allow users to keep using the old application names, but these will be deprecated soon. Users are encouraged to adopt the new application and library names as soon as possible.
 
-Build
------
+# Table of Contents
 
-### Step 1: Building libcamera
+1. [Introduction](#1-introduction)
+   
+2. [Setup](#2-setup)
+   - [Automatic Setup (Recommended)](#automatic-setup-recommended)
+   - [Manually Install RPi_Cam_Web_Interface (Optional)](#manually-install-rpi_cam_web_interface-optional)
+
+3. [Running rpicam-mjpeg on RPi_Cam_Web_Interface](#3-running-rpicam-mjpeg-on-rpi_cam_web_interface)
+
+4. [Starting the Web Interface](#4-starting-the-web-interface)
+
+5. [Running rpicam-mjpeg](#5-running-rpicam-mjpeg)
+
+6. [Clean and Rebuild](#6-clean-and-rebuild)
+
+7. [Testing](#7-testing)
+
+8. [FIFO](#8-fifo)
+    
+## 1. Introduction
+
+This program is designed to develop a **libcamera-based, multi-stream camera system**. It supports the latest Raspberry Pi models and offers features such as:
+
+- **Preview streams**: A real-time view of the camera feed.
+- **Full-resolution video recording**: Capture high-quality video.
+- **Still image capture**: Take high-resolution photos.
+- **Motion detection**: Automatically trigger events when motion is detected.
+
+### RPi_Cam_Web_Interface Integration
+
+A key aspect of this system is its integration with the **RPi_Cam_Web_Interface**, providing a graphical interface(GUI) for managing all camera operations instead of command line interface(CLI). 
+
+
+### Supported FIFO Commands. 
+See [8. FIFO](#8-fifo) for more details.
+
+| Command | Description                    |
+|---------|--------------------------------|
+| `im`    | Capture still image            |
+| `ca`    | Start/stop video recording     |
+| `pv`    | Setup preview                  |
+| `ro`    | Set rotation                   |
+| `fl`    | Set flipping                   |
+| `sc`    | Set counts                     |
+| `md`    | Setup motion detection         |
+| `wb`    | Adjust white balance           |
+| `mm`    | Set metering mode for exposure |
+| `ec`    | Adjust exposure compensation   |
+| `ag`    | Set analogue gain              |
+| `is`    | Set ISO                        |
+| `px`    | Set video resolution           |
+| `co`    | Adjust image contrast          |
+| `br`    | Adjust image brightness        |
+| `sa`    | Adjust image saturation        |
+| `qu`    | Set image quality              |
+| `bi`    | Set video bitrate              |
+| `sh`    | Adjust image sharpness         |
+
+
+## 2. Setup
+
+### Automatic Setup (Recommended)
+
+### Step 1: Install dependencies + rpicam-mjpeg
+```bash
+git clone git@github.com:consiliumsolutions/RPi_Cam_Web_Interface.git
+cd RPi_Cam_Web_Interface
+bin/install-rpicam-mjpeg.sh
+```
+
+### Step 2: Install the web application
+```bash
+./install.sh
+```
+
+### Step 3: Run the web application + rpicam-mjpeg
+```bash
+./start.sh
+```
+Visit our program at: http://localhost/html/ and start using it!
+
+Now, you can directly skip to [3. Running rpicam-mjpeg on RPi_Cam_Web_Interface](#3-running-rpicam-mjpeg-on-rpi_cam_web_interface).
+
+### Manual Setup (Try this only when the Automatic Setup doesn't work)
+Follow the following steps to manually set up and install the **rpicam-apps** system on your Raspberry Pi.
+
+### Step 1: Build libcamera
 * Build and install the raspberrypi/libcamera library; see documentation [here.](https://www.raspberrypi.com/documentation/computers/camera_software.html#building-libcamera)
   - **NOTE:** Do not use the `libcamera` packages from the official repositories, these are outdated.
 
-### Step 2: Building rpicam-apps
+### Step 2: Build rpicam-apps
 1. First fetch the necessary dependencies for rpicam-apps.
 ```bash
 sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev libavdevice-dev
@@ -38,80 +120,192 @@ To install the `rpicam-apps` binaries system-wide, run:
 sudo meson install -C build
 ```
 
-> This allows you to use the binaries from anywhere in the terminal without needing to navigate to the build directory each time. If you are only testing locally, you can skip this step and run the binaries directly from the `build` directory.
+> This allows you to use the binaries from anywhere in the terminal without needing to navigate to the build directory each time. 
 
 The official instructions to build rpicam-apps; see documentation [here.](https://www.raspberrypi.com/documentation/computers/camera_software.html#building-rpicam-apps)
 
+### Step 3: Install RPi_Cam_Web_Interface
 
----
+This section focuses on setting up the web interface for managing the camera system.
 
+-------
+#### Manually Install RPi_Cam_Web_Interface (Optional)
 
-Running rpicam-mjpeg
+#### GPAC
+
+GPAC is not available in the Bookworm repos (see issue #689). Follow these instructions to build GPAC from source:
+
+1. Clone the GPAC repository:
+   ```bash
+   git clone https://github.com/gpac/gpac.git
+   ```
+
+2. Install the necessary dependencies:
+   ```bash
+   sudo apt install build-essential pkg-config g++ git cmake yasm
+   sudo apt install zlib1g-dev libfreetype6-dev libjpeg-dev libpng-dev libmad0-dev libfaad-dev libogg-dev \
+       libvorbis-dev libtheora-dev liba52-0.7.4-dev libavcodec-dev libavformat-dev libavutil-dev \
+       libswscale-dev libavdevice-dev libnghttp2-dev libopenjp2-7-dev libcaca-dev libxv-dev \
+       x11proto-video-dev libgl1-mesa-dev libglu1-mesa-dev x11proto-gl-dev libxvidcore-dev \
+       libssl-dev libjack-jackd2-dev libasound2-dev libpulse-dev libsdl2-dev dvb-apps mesa-utils \
+       libcurl4-openssl-dev
+   ```
+
+3. Build GPAC:
+   ```bash
+   cd gpac
+   ./configure
+   make
+   ```
+
+4. Install GPAC system-wide:
+   ```bash
+   sudo make install
+   ```
+
+#### RPi_Cam_Web_Interface
+
+After building and installing GPAC, proceed with the **RPi_Cam_Web_Interface** installation:
+
+1. Clone the **RPi_Cam_Web_Interface** repository:
+   ```bash
+   git clone https://github.com/silvanmelchior/RPi_Cam_Web_Interface.git
+   cd RPi_Cam_Web_Interface
+   ```
+
+1. Set rpicam-mjpeg as the raspimjpeg driver:
+   ```bash
+   mv bin/raspimjpeg bin/raspimjpeg.bak
+   ln -s `which rpicam-mjpeg` bin/raspimjpeg
+   ```
+
+2. Modify the `install.sh` script to exclude GPAC installation:
+   ```bash
+   sed -i 's/gpac//p' install.sh
+   ```
+
+3. Run the installation script:
+   ```bash
+   ./install.sh
+   ```
+
+4. During installation, use the following options:
+   - Start automatically: **No**
+   - Port: **80**
 --------------------
+## 3. Running rpicam-mjpeg on RPi_Cam_Web_Interface
 
-There are three subcommands available, each of which will output a different stream type.
-At this stage, the subcommands are not configured to run concurrently:
+### Prerequisites
 
-### 1. Preview Stream
-
-```bash
-./build/apps/rpicam-mjpeg --preview-output /tmp/cam.jpg --preview-width 640 --preview-height 480
-```
-* `./build/apps/rpicam-mjpeg --preview-output /tmp/cam.jpg` will behave in a way similar to the RaspiMJPEG preview stream.
-  - `open /tmp/cam.jpg` while running should resemble a video stream if image viewer supports live-reloading (such as default RPi image viewer)
-  - Terminate with Ctrl+C
-    
-### 2. Still Image Stream
+If you don’t have the following, create them:
 
 ```bash
-./build/apps/rpicam-mjpeg --still-output /tmp/cam.jpg
-```
-* `./build/apps/rpicam-mjpeg --stream still --output /tmp/cam.jpg` will save a timestamped JPEG.
-  - Output files are saved in the `/tmp` directory.
-    
-### 3. Video Stream
-
-```bash
-./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4
-```
-* `./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4` will save a 5s MP4 video.
-  - Automatically terminate after finishing the 5-second recording.
-  - Alternatively, you can manually terminate the process by closing the popup window.
-  - **NOTE:** Terminating with Ctrl+C will result in a corrupt video.
-  - Output video is saved in the `/tmp` directory.
-
-### 4. Motion Stream
-```bash
-mkFIFO /tmp/schedulerFIFO
-cat /tmp/schedulerFIFO
+mkfifo /var/www/html/FIFO        # This should have been created by the installer, however, check if it exists.
+mkdir /dev/shm/mjpeg             # This is where the preview stream will be written; it may be deleted across reboots.
+sudo chmod -R 777 /dev/shm/mjpeg # Typically this directory would be owned by www-data, if you are not that user give yourself access ;)
+mkfifo /var/www/html/FIFO1       # Scheduler/motion detection FIFO
 ```
 * This acts the scheduler's FIFO file we will be writing into. 
 * `cat` to see the updates in the file
 
+## 4. Starting the Web Interface
+
+Visit `http://localhost/html/` on your Raspberry Pi to access the RPi_Cam_Web_Interface.
+> **Info**  
+> However, since the browser on the Raspberry Pi might be laggy, it's recommended to access the interface from another device on the same network.  
+> Simply open a browser and navigate to `http://<Raspberry_Pi_IP>/html/` (replace `<Raspberry_Pi_IP>` with your Raspberry Pi's local IP address).
+
+The web interface should already be running, but if it is not, you can start the Apache web server using the following command:
+
 ```bash
-./build/apps/rpicam-mjpeg --motion-output /tmp/schedulerFIFO --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json
+sudo systemctl start apache2
 ```
-* `./build/apps/rpicam-mjpeg --motion-output /tmp/schedulerFIFO --viewfinder-width 128 --viewfinder-height 96 --post-process-file assets/motion_detect.json` will trigger motion detection.
-  - Log "1" to scheduler FIFO if motion starts, "0" if it stops.
 
-### 5. Multi Stream
+When you open the interface for the first time (by visiting `http://<Raspberry_Pi_IP>/html/`), it may appear broken. This is expected as we need to start the driver (`rpicam-mjpeg`) first.
+
+## 5. Running rpicam-mjpeg
+
+Now, you can start running **rpicam-mjpeg** by running the `start.sh` script in the RPi_Cam_Web_Interface repository. This will use the global configuration file (`/etc/raspimjpeg`), which should have been adjusted based on your choices at installation.
+
+**NOTE:** If `start.sh` does not work due to a `raspimjpeg: command not found` error, you have not installed rpicam-mjpeg correctly.
+
+Alternatively, you can run the binary directly (and specificy locations with CLI arguments)
+
 ```bash
-./build/apps/rpicam-mjpeg --video-output /tmp/vid.mp4 --preview-output /tmp/cam.jpg --preview-width 640 --preview-height 480
+./build/apps/rpicam-mjpeg --preview_path /dev/shm/mjpeg/cam.jpg --media-path /var/www/html/media --video_path 'vi_%v.mp4' --image_path 'i_%i.jpg' --control_file /var/www/html/FIFO --motion_pipe /var/www/html/FIFO1
 ```
 
-This will save a 5s MP4 video `vid.mp4`, and while the video is being captured, also output a preview stream at `/tmp/cam.jpg`
+At this point, your web interface should successfully display the preview.
+This means that you have successfully configured the **RPi_Cam_Web_Interface** and integrated it with **rpicam-mjpeg**.
 
----
+### Quitting the FIFO Environment
 
-FIFO
------
+To quit the FIFO environment and stop **rpicam-mjpeg**, use `Ctrl + C` in the terminal where it is running.
 
-Currently, FIFO can take 3 different commands:
+## 6. Clean and Rebuild
 
-Firstly, create FIFO by:
+
+If you need to clean the build and start fresh, follow these steps:
+
+### 1. Remove the existing build directory:
 ```bash
-mkfifo /tmp/FIFO
+rm -rf ./build
 ```
+
+### 2. Set up and rebuild the project:
+```bash
+meson setup build
+meson compile -C build
+```
+
+### 3. Reinstall the updated build(Optional):
+```bash
+sudo meson install -C build
+```
+> **Note:** The installation step is only required if you need to install the binaries system-wide. For local testing, you can simply run the binaries directly from the `build` directory.
+
+This will ensure the previous build is removed, a fresh build is created, and the updated binaries are installed.
+
+## 7. Testing
+
+This project implements comprehensive automated testing for the `rpicam_mjpeg` program using Python scripts. The testing suite ensures that each FIFO command functions as expected and that any changes to the codebase do not introduce regressions. The tests include both functional command execution and detailed verification of their effects using image analysis.
+
+### Overview
+
+- **Automated Tests**: Each FIFO command (`im`, `ca`, `pv`, `ro`, `fl`, `sc`, `md`, `wb`, `mm`, `ec`, `ag`, `is`, `px`, `co`, `br`, `sa`, `qu`, `bi`, `sh`) is tested individually to verify its functionality.
+
+### Installation
+
+1. **Install Dependencies**:
+
+   ```bash
+   sudo apt install python3 python3-pillow
+   ```
+
+2. **Ensure FIFO Directory Exists**
+
+   Ensure FIFO Directory Exists:
+The FIFO is located at /var/www/html/FIFO. Ensure this directory exists and has the appropriate permissions.
+
+   ```bash
+   sudo mkdir -p /var/www/html
+   sudo mkfifo /var/www/html/FIFO
+   sudo chmod 777 /var/www/html/FIFO
+   ```
+
+### Run the Test
+```bash
+python3 testing/main.py
+```
+
+### Check Test Results
+The testing result would be stored in `testing_report.txt` in the main directory, it would also be printed out.
+
+## 8. FIFO
+
+You don’t need FIFO commands to interact with the camera system, but if you want to use it for advanced control, here are the steps:
+
+To quit the FIFO environment and stop **rpicam-mjpeg**, use `Ctrl + C` in the terminal where it is running.
 
 ### 1: Still Image Capture
 On terminal a:
@@ -123,9 +317,7 @@ On terminal b:
 ```bash
 echo 'im' > /tmp/FIFO
 ```
-Run this command to take a still picture :wink:
-
-
+Run this command to take a still picture
 
 ### 2: Video Recording
 On terminal a:
@@ -223,65 +415,6 @@ echo 'ca 1 30' > /tmp/FIFO
 echo 'is 1000' > /tmp/FIFO
 ```
 To change iso during video recording;
----
-Clean and Rebuild
----------------------
-
-If you need to clean the build and start fresh, follow these steps:
-
-### 1. Remove the existing build directory:
-```bash
-rm -rf ./build
-```
-
-### 2. Set up and rebuild the project:
-```bash
-meson setup build
-meson compile -C build
-```
-
-### 3. Reinstall the updated build(Optional):
-```bash
-sudo meson install -C build
-```
-> **Note:** The installation step is only required if you need to install the binaries system-wide. For local testing, you can simply run the binaries directly from the `build` directory.
-
-This will ensure the previous build is removed, a fresh build is created, and the updated binaries are installed.
-
-## Testing
-
-This project implements comprehensive automated testing for the `rpicam_mjpeg` program using Python scripts. The testing suite ensures that each FIFO command functions as expected and that any changes to the codebase do not introduce regressions. The tests include both functional command execution and detailed verification of their effects using image analysis.
-
-### Overview
-
-- **Automated Tests**: Each FIFO command (`im`, `ca`, `pv`, `ro`, `fl`, `sc`, `md`, `wb`, `mm`, `ec`, `ag`, `is`, `px`, `co`, `br`, `sa`, `qu`, `bi`, `sh`) is tested individually to verify its functionality.
-
-### Installation
-
-1. **Install Dependencies**:
-
-   ```bash
-   sudo apt install python3 python3-pillow
-   ```
-
-2. **Ensure FIFO Directory Exists**
-
-   Ensure FIFO Directory Exists:
-The FIFO is located at /var/www/html/FIFO. Ensure this directory exists and has the appropriate permissions.
-
-   ```bash
-   sudo mkdir -p /var/www/html
-   sudo mkfifo /var/www/html/FIFO
-   sudo chmod 777 /var/www/html/FIFO
-   ```
-
-### Run the Test
-```bash
-python3 testing/main.py
-```
-
-### Check Test Results
-The testing result would be stored in `testing_report.txt` in the main directory, it would also be printed out.
 
 License
 -------
@@ -290,6 +423,5 @@ The source code is made available under the simplified [BSD 2-Clause license](ht
 
 Status
 ------
-
 [![ToT libcamera build/run test](https://github.com/raspberrypi/rpicam-apps/actions/workflows/rpicam-test.yml/badge.svg)](https://github.com/raspberrypi/rpicam-apps/actions/workflows/rpicam-test.yml)
 
