@@ -173,6 +173,12 @@ After building and installing GPAC, proceed with the **RPi_Cam_Web_Interface** i
    cd RPi_Cam_Web_Interface
    ```
 
+1. Set rpicam-mjpeg as the raspimjpeg driver:
+   ```bash
+   mv bin/raspimjpeg bin/raspimjpeg.bak
+   ln -s `which rpicam-mjpeg` bin/raspimjpeg
+   ```
+
 2. Modify the `install.sh` script to exclude GPAC installation:
    ```bash
    sed -i 's/gpac//p' install.sh
@@ -194,8 +200,10 @@ After building and installing GPAC, proceed with the **RPi_Cam_Web_Interface** i
 If you don’t have the following, create them:
 
 ```bash
-mkfifo /var/www/html/FIFO  # This should have been created by the installer, however, check if it exists.
-mkdir /dev/shm/mjpeg       # This is where the preview stream will be written; it will be deleted across reboots.
+mkfifo /var/www/html/FIFO        # This should have been created by the installer, however, check if it exists.
+mkdir /dev/shm/mjpeg             # This is where the preview stream will be written; it may be deleted across reboots.
+sudo chmod -R 777 /dev/shm/mjpeg # Typically this directory would be owned by www-data, if you are not that user give yourself access ;)
+mkfifo /var/www/html/FIFO1       # Scheduler/motion detection FIFO
 ```
 * This acts the scheduler's FIFO file we will be writing into. 
 * `cat` to see the updates in the file
@@ -213,24 +221,18 @@ The web interface should already be running, but if it is not, you can start the
 sudo systemctl start apache2
 ```
 
-When you open the interface for the first time (by visiting `http://<Raspberry_Pi_IP>/html/`), it may appear broken. This is expected as we need to manually set the status updates. 
-
-To fix this, set the default state to `ready` by running the following command:
-
-```bash
-echo ready | tr -d '\n' > /dev/shm/mjpeg/status_mjpeg.txt
-```
-
-> **Note:** The file will **not** work if there is a trailing newline, which is why we use `tr -d '\n'` to remove it.
-
-After setting the status, you should now see text on the buttons in the web interface, indicating that it is ready.
+When you open the interface for the first time (by visiting `http://<Raspberry_Pi_IP>/html/`), it may appear broken. This is expected as we need to start the driver (`rpicam-mjpeg`) first.
 
 ## 5. Running rpicam-mjpeg
 
-Now, you can start running **rpicam-mjpeg** by executing the following command:
+Now, you can start running **rpicam-mjpeg** by running the `start.sh` script in the RPi_Cam_Web_Interface repository. This will use the global configuration file (`/etc/raspimjpeg`), which should have been adjusted based on your choices at installation.
+
+**NOTE:** If `start.sh` does not work due to a `raspimjpeg: command not found` error, you have not installed rpicam-mjpeg correctly.
+
+Alternatively, you can run the binary directly (and specificy locations with CLI arguments)
 
 ```bash
-./build/apps/rpicam-mjpeg --preview-output /dev/shm/mjpeg/cam.jpg --video-output /tmp/cam.mp4 --still-output /tmp/cam.jpg --fifo /var/www/html/FIFO
+./build/apps/rpicam-mjpeg --preview_path /dev/shm/mjpeg/cam.jpg --media-path /var/www/html/media --video_path 'vi_%v.mp4' --image_path 'i_%i.jpg' --control_file /var/www/html/FIFO --motion_pipe /var/www/html/FIFO1
 ```
 
 At this point, your web interface should successfully display the preview.
