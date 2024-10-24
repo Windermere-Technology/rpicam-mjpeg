@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
 * Copyright (C) 2020, Raspberry Pi (Trading) Ltd.
-* Copyright (C) 2024, Dylan Lom
-* TODO: If people want to stick their names here they can!
+* Copyright (C) 2024, Dylan Lom, She Xin Lim, Zian Li, Ching-Cheng Lu, Aiden Sloots, Ning Bao, Hanqi Zhang, Yucheng Yan
 *
 * rpicam_jpeg.cpp - minimal libcamera jpeg capture app.
 */
